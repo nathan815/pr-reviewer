@@ -7,7 +7,6 @@ import { learningsRouter } from './routes/learnings.js';
 import { settingsRouter } from './routes/settings.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { unprotectAllReviewFiles } from './lib/fileStore.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -30,7 +29,6 @@ app.get('*', (_req, res) => {
   res.sendFile(path.join(publicDir, 'index.html'));
 });
 
-app.listen(PORT, async () => {
-  await unprotectAllReviewFiles();
+app.listen(PORT, () => {
   console.log(`PR Review Agent running at http://localhost:${PORT}`);
 });

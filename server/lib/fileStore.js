@@ -12,28 +12,6 @@ export async function ensureDir(dir) {
   await fs.mkdir(dir, { recursive: true });
 }
 
-const PROTECTED_FILENAMES = ['feedback.json', 'overview.md', 'metadata.json'];
-
-/** Restore write permissions on all review files (cleanup after crash/restart) */
-export async function unprotectAllReviewFiles() {
-  try {
-    const repos = await fs.readdir(REVIEWS_ROOT).catch(() => []);
-    for (const repo of repos) {
-      if (repo.startsWith('.')) continue;
-      const repoDir = path.join(REVIEWS_ROOT, repo);
-      const stat = await fs.stat(repoDir).catch(() => null);
-      if (!stat?.isDirectory()) continue;
-      const prs = await fs.readdir(repoDir).catch(() => []);
-      for (const pr of prs) {
-        for (const name of PROTECTED_FILENAMES) {
-          const f = path.join(repoDir, pr, name);
-          try { await fs.chmod(f, 0o644); } catch {}
-        }
-      }
-    }
-  } catch {}
-}
-
 function reviewDir(repo, prId) {
   return path.join(REVIEWS_ROOT, repo, String(prId));
 }

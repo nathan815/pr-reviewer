@@ -261,35 +261,37 @@ CRITICAL RULES:
   const profile = config.profiles?.[config.activeProfile] || Object.values(config.profiles)[0];
   const program = profile.program;
 
-  // Build args: same model but with discussion prompt instead of review skill
+  // Build args: same model but with scoped permissions instead of --yolo
   const baseArgs = [];
   for (const a of profile.args) {
     if (a === '-p' || a.includes('{{prUrl}}')) continue;
+    if (a === '--yolo' || a === '--allow-all' || a === '--allow-all-tools' || a === '--allow-all-paths') continue;
     baseArgs.push(a);
   }
-  // Remove --yolo if present, add it back (it might be in different positions)
-  const args = baseArgs.filter(a => a !== '--yolo');
-  args.push('--yolo', '-p', prompt);
+  const args = baseArgs.filter(a => !a.startsWith('--allow-tool') && !a.startsWith('--deny-tool'));
+
+  // Scoped permissions: read anything, only write the response file
+  const responseFilePosix = responseFile.replace(/\\/g, '/');
+  args.push(
+    '--allow-tool=read',
+    '--allow-tool=grep',
+    '--allow-tool=glob',
+    '--allow-tool=view',
+    `--allow-tool=write(${responseFilePosix})`,
+    `--allow-tool=create(${responseFilePosix})`,
+    '--no-ask-user',
+    '-p', prompt,
+  );
 
   const shellCmd = [program, ...args.map(a => a.includes(' ') || a.includes('\n') ? `"${a.replace(/"/g, '\\"')}"` : a)].join(' ');
 
-  // Protect review files from direct edits by the agent
-  const reviewDir = path.join(REVIEWS_ROOT, repo, String(prId));
-  const protectedFiles = ['feedback.json', 'overview.md', 'metadata.json'].map(f => path.join(reviewDir, f));
-  for (const f of protectedFiles) {
-    try { await fs.chmod(f, 0o444); } catch {}
-  }
-  const unprotectFiles = async () => {
-    for (const f of protectedFiles) {
-      try { await fs.chmod(f, 0o644); } catch {}
-    }
-  };
+  const reviewDirPath = path.join(REVIEWS_ROOT, repo, String(prId));
 
   const child = spawn(shellCmd, [], {
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: true,
     detached: false,
-    cwd: reviewDir,
+    cwd: reviewDirPath,
   });
 
   let stdout = '';
@@ -309,7 +311,6 @@ CRITICAL RULES:
   discussionAgents.set(key, agentInfo);
 
   child.on('close', async (code) => {
-    await unprotectFiles();
     agentInfo.status = code === 0 ? 'completed' : 'failed';
     agentInfo.exitCode = code;
     agentInfo.completedAt = new Date().toISOString();
@@ -344,7 +345,6 @@ CRITICAL RULES:
   });
 
   child.on('error', async (err) => {
-    await unprotectFiles();
     agentInfo.status = 'failed';
     agentInfo.error = err.message;
     agentInfo.completedAt = new Date().toISOString();
