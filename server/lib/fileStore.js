@@ -6,6 +6,7 @@ const REVIEWS_ROOT = path.join(os.homedir(), 'pr-reviews');
 const LEARNINGS_DIR = path.join(REVIEWS_ROOT, '.learnings');
 const EXAMPLES_PATH = path.join(LEARNINGS_DIR, 'examples.jsonl');
 const GUIDELINES_PATH = path.join(LEARNINGS_DIR, 'guidelines.md');
+const EXTRA_INSTRUCTIONS_PATH = path.join(REVIEWS_ROOT, 'extra_instructions.md');
 
 export async function ensureDir(dir) {
   await fs.mkdir(dir, { recursive: true });
@@ -283,4 +284,19 @@ export async function markCurationComplete() {
   }
 
   await fs.writeFile(path.join(LEARNINGS_DIR, '.last-curated'), new Date().toISOString(), 'utf-8');
+}
+
+// --- Extra Instructions ---
+
+export async function getExtraInstructions() {
+  try {
+    return await fs.readFile(EXTRA_INSTRUCTIONS_PATH, 'utf-8');
+  } catch {
+    return '';
+  }
+}
+
+export async function setExtraInstructions(content) {
+  await ensureDir(REVIEWS_ROOT);
+  await fs.writeFile(EXTRA_INSTRUCTIONS_PATH, content, 'utf-8');
 }

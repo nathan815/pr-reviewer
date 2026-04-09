@@ -650,6 +650,30 @@ a:hover { text-decoration: underline; }
   animation: highlightPulse 1.5s ease-in-out 2;
 }
 
+/* Instructions editor */
+.instructions-editor {
+  width: 100%;
+  min-height: 300px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+  tab-size: 2;
+}
+.instructions-editor:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.instructions-editor::placeholder {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
 /* Modal */
 .modal-overlay {
   position: fixed;

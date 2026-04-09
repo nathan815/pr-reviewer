@@ -4,6 +4,7 @@ import { reviewsRouter } from './routes/reviews.js';
 import { adoRouter } from './routes/ado.js';
 import { agentRouter } from './routes/agent.js';
 import { learningsRouter } from './routes/learnings.js';
+import { settingsRouter } from './routes/settings.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -19,6 +20,7 @@ app.use('/api/reviews', reviewsRouter);
 app.use('/api/ado', adoRouter);
 app.use('/api/agent', agentRouter);
 app.use('/api/learnings', learningsRouter);
+app.use('/api/settings', settingsRouter);
 
 // Serve built React client in production
 const publicDir = path.join(__dirname, 'public');
