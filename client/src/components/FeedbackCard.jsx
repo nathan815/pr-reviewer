@@ -116,7 +116,7 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-accept btn-sm" onClick={() => onAccept(noteText)}>✓ Accept</button>
-              <button className="btn btn-noted btn-sm" onClick={() => onNote(noteText)}>✓ Note</button>
+              <button className="btn btn-noted btn-sm" onClick={() => onNote(noteText)}>✓ Accept As Note</button>
               <button className="btn btn-reject btn-sm" onClick={() => onReject(noteText)}>✗ Reject</button>
             </div>
           </>

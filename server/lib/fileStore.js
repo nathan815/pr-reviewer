@@ -85,8 +85,12 @@ export async function updateFeedbackStatus(repo, prId, feedbackId, newStatus, us
 
   // Record learning example on accept/noted/reject
   if (newStatus === 'accepted' || newStatus === 'noted' || newStatus === 'rejected') {
-    const learnDecision = newStatus === 'noted' ? 'accepted' : newStatus;
-    await recordLearningExample(repo, prId, item, learnDecision, userNote);
+    await recordLearningExample(repo, prId, item, newStatus, userNote);
+  }
+
+  // Remove learning example on reset to pending
+  if (newStatus === 'pending') {
+    await removeLearningExample(repo, prId, feedbackId);
   }
 
   return item;
@@ -198,6 +202,21 @@ async function recordLearningExample(repo, prId, item, decision, userNote) {
     endLine: item.endLine,
   };
   await fs.appendFile(EXAMPLES_PATH, JSON.stringify(example) + '\n', 'utf-8');
+}
+
+/** Remove learning examples for a specific feedback item (on reset) */
+async function removeLearningExample(repo, prId, feedbackId) {
+  try {
+    const raw = await fs.readFile(EXAMPLES_PATH, 'utf-8');
+    const lines = raw.trim().split('\n').filter(Boolean);
+    const filtered = lines.filter(line => {
+      const ex = JSON.parse(line);
+      return !(ex.repo === repo && String(ex.prId) === String(prId) && ex.feedbackId === feedbackId);
+    });
+    await fs.writeFile(EXAMPLES_PATH, filtered.length ? filtered.join('\n') + '\n' : '', 'utf-8');
+  } catch {
+    // No examples file yet — nothing to remove
+  }
 }
 
 /** Get all learning examples */

@@ -204,7 +204,7 @@ export default function Learnings() {
             ) : (
               <>
                 <div className="filter-bar" style={{ marginBottom: 12 }}>
-                  {['all', 'accepted', 'rejected', 'with-notes'].map(f => {
+                  {['all', 'accepted', 'noted', 'rejected', 'with-notes'].map(f => {
                     const count = f === 'all' ? examples.length
                       : f === 'with-notes' ? examples.filter(e => e.userNote).length
                       : examples.filter(e => e.decision === f).length;
@@ -234,8 +234,8 @@ export default function Learnings() {
                         className={`example-item example-${ex.decision}`}
                       >
                         <div className="example-header">
-                          <span className={`badge ${ex.decision === 'accepted' ? 'badge-low' : 'badge-high'}`}>
-                            {ex.decision === 'accepted' ? '✓ Accepted' : '✗ Rejected'}
+                          <span className={`badge ${ex.decision === 'rejected' ? 'badge-high' : ex.decision === 'noted' ? 'status-noted' : 'badge-low'}`}>
+                            {ex.decision === 'accepted' ? '✓ Accepted' : ex.decision === 'noted' ? '✓ Noted' : '✗ Rejected'}
                           </span>
                           <span className="badge" style={{ textTransform: 'capitalize' }}>{ex.category}</span>
                           <span className="badge">{ex.severity}</span>

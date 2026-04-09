@@ -423,13 +423,17 @@ export async function launchCurationAgent() {
     `[${e.decision.toUpperCase()}] (${e.category}/${e.severity}) [${e.repo}] "${e.title}" — ${e.comment}${e.userNote ? `\n  User note: ${e.userNote}` : ''}`;
 
   const statsBlock = [
-    `Total examples: ${allExamples.length} (${allExamples.filter(e=>e.decision==='accepted').length} accepted, ${allExamples.filter(e=>e.decision==='rejected').length} rejected)`,
+    `Total examples: ${allExamples.length} (${allExamples.filter(e=>e.decision==='accepted').length} accepted, ${allExamples.filter(e=>e.decision==='noted').length} noted, ${allExamples.filter(e=>e.decision==='rejected').length} rejected)`,
     `Repos: ${repos.join(', ')}`,
   ].join('\n');
 
-  let prompt = `You are a reviewer guidelines curator. Your job is to maintain two levels of reviewer guidelines based on the user's accept/reject decisions on PR review comments:\n\n`;
+  let prompt = `You are a reviewer guidelines curator. Your job is to maintain two levels of reviewer guidelines based on the user's accept/reject/note decisions on PR review comments:\n\n`;
   prompt += `1. **Global guidelines** at ~/pr-reviews/.learnings/guidelines.md — rules that apply across all repos\n`;
   prompt += `2. **Per-repo guidelines** at ~/pr-reviews/.learnings/repo/{repoName}/guidelines.md — rules specific to a codebase\n\n`;
+  prompt += `Decision types:\n`;
+  prompt += `- **ACCEPTED** — the user wants this kind of comment posted to ADO\n`;
+  prompt += `- **NOTED** — the user found this informational/useful for themselves, but does NOT want it posted to ADO. Future reviews should still generate these but auto-categorize them as notes.\n`;
+  prompt += `- **REJECTED** — the user did not find this comment useful\n\n`;
   prompt += `${statsBlock}\n\n`;
 
   // Include existing guidelines
@@ -467,6 +471,7 @@ export async function launchCurationAgent() {
   prompt += `- **Severity calibration** — what severity levels to use for different issue types\n`;
   prompt += `- **Style & tone** — how comments should be phrased\n`;
   prompt += `- **Category-specific notes** — per-category preferences\n`;
+  prompt += `- **Auto-note patterns** — types of comments that should be generated as informational notes (not for ADO posting) based on NOTED examples\n`;
   prompt += `Include specific examples from the data to illustrate each rule.\n`;
   prompt += `For per-repo files, focus on what's unique to that codebase (tech stack, naming conventions, patterns used, etc.).\n`;
 
