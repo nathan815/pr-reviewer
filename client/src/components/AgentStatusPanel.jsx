@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import AnsiToHtml from 'ansi-to-html';
 
 const STATUS_ICONS = {
@@ -162,6 +163,9 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
                   </div>
                   <div className="agent-item-meta">
                     PID {agent.pid} · {timeAgo(agent.startedAt)}
+                    {!repo && agent.repo && agent.prId && (
+                      <> · <Link to={`/review/${agent.repo}/${agent.prId}`} onClick={e => e.stopPropagation()} style={{ color: 'var(--accent)' }}>{agent.repo}/{agent.prId}</Link></>
+                    )}
                   </div>
                 </div>
               </div>
