@@ -242,8 +242,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
               <div className="agent-output-full" ref={outputRef}>
                 {agent.command && (
                   <div style={{ marginBottom: 8 }}>
-                    <div className="agent-output-label">command</div>
-                    <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 11, padding: 8, background: 'var(--bg-primary)', borderRadius: 4, marginTop: 4 }}>{agent.command}</pre>
+                    <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 11, padding: 8, background: 'var(--bg-primary)', borderRadius: 4 }}>{agent.command}</pre>
                   </div>
                 )}
                 {fullOutput?.stderr && (
@@ -299,8 +298,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
               <div className="agent-output-full">
                 {run.command && (
                   <div style={{ marginBottom: 8 }}>
-                    <div className="agent-output-label">command</div>
-                    <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 11, padding: 8, background: 'var(--bg-primary)', borderRadius: 4, marginTop: 4 }}>{run.command}</pre>
+                    <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 11, padding: 8, background: 'var(--bg-primary)', borderRadius: 4 }}>{run.command}</pre>
                   </div>
                 )}
                 {run.stdout && (
