@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { launchReviewAgent, getAgentStatuses, getAgentOutput, getAgentHistory, killAgent, getConfig, setActiveProfile, saveConfig } from '../lib/agentLauncher.js';
+import { launchReviewAgent, getAgentStatuses, getAgentOutput, getAgentHistory, killAgent, getConfig, setActiveProfile, saveConfig, getDiscussionAgentOutput } from '../lib/agentLauncher.js';
 
 export const agentRouter = Router();
 
@@ -36,6 +36,13 @@ agentRouter.get('/status', (_req, res) => {
 agentRouter.get('/output/:repo/:prId', async (req, res) => {
   const output = await getAgentOutput(req.params.repo, req.params.prId);
   if (!output) return res.status(404).json({ error: 'No agent found for this PR' });
+  res.json(output);
+});
+
+// Get full output for a discussion agent
+agentRouter.get('/output/:repo/:prId/:feedbackId', (req, res) => {
+  const output = getDiscussionAgentOutput(req.params.repo, req.params.prId, req.params.feedbackId);
+  if (!output) return res.status(404).json({ error: 'No discussion agent found' });
   res.json(output);
 });
 

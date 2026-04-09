@@ -356,6 +356,16 @@ export function getDiscussionStatus(repo, prId, feedbackId) {
   };
 }
 
+/** Get full output for a discussion agent */
+export function getDiscussionAgentOutput(repo, prId, feedbackId) {
+  const key = `${repo}/${prId}/${feedbackId}`;
+  const info = discussionAgents.get(key);
+  if (!info) return null;
+  const stdout = typeof info.stdout === 'function' ? info.stdout() : (info._stdout || '');
+  const stderr = typeof info.stderr === 'function' ? info.stderr() : (info._stderr || '');
+  return { key, status: info.status, pid: info.pid, stdout, stderr };
+}
+
 /** Get status of all tracked agents (includes last N chars of output) */
 export function getAgentStatuses() {
   const statuses = [];
@@ -378,6 +388,30 @@ export function getAgentStatuses() {
       outputTail: stdout.slice(-500),
       stderrTail: stderr.slice(-500),
       outputLength: stdout.length,
+      agentType: 'review',
+    });
+  }
+  // Include discussion agents
+  for (const [key, info] of discussionAgents) {
+    const stdout = typeof info.stdout === 'function' ? info.stdout() : (info._stdout || '');
+    const stderr = typeof info.stderr === 'function' ? info.stderr() : (info._stderr || '');
+    statuses.push({
+      key,
+      repo: info.repo,
+      prId: info.prId,
+      pid: info.pid,
+      status: info.status,
+      profileName: 'discussion',
+      command: info.command || null,
+      startedAt: info.startedAt,
+      completedAt: info.completedAt || null,
+      exitCode: info.exitCode ?? null,
+      error: info.error || null,
+      outputTail: stdout.slice(-500),
+      stderrTail: stderr.slice(-500),
+      outputLength: stdout.length,
+      agentType: 'discussion',
+      feedbackId: info.feedbackId,
     });
   }
   return statuses;

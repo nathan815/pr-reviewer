@@ -71,8 +71,11 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
     if (!expandedKey) { setFullOutput(null); return; }
     const agent = agents.find(a => a.key === expandedKey);
     if (!agent) { setFullOutput(null); return; }
+    const outputUrl = agent.agentType === 'discussion'
+      ? `/api/agent/output/${agent.repo}/${agent.prId}/${agent.feedbackId}`
+      : `/api/agent/output/${agent.repo}/${agent.prId}`;
     const load = () =>
-      fetch(`/api/agent/output/${agent.repo}/${agent.prId}`)
+      fetch(outputUrl)
         .then(r => r.json())
         .then(data => {
           setFullOutput(data);
@@ -154,7 +157,9 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
                   {STATUS_ICONS[agent.status] || '❓'}
                 </span>
                 <div>
-                  <div className="agent-item-name">{agent.profileName}</div>
+                  <div className="agent-item-name">
+                    {agent.agentType === 'discussion' ? `Discussion · ${agent.feedbackId}` : agent.profileName}
+                  </div>
                   <div className="agent-item-meta">
                     PID {agent.pid} · {timeAgo(agent.startedAt)}
                   </div>
