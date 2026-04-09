@@ -224,7 +224,7 @@ export async function updateFeedbackContent(repo, prId, feedbackId, updates) {
 
     if (!item.editHistory) item.editHistory = [];
     const snapshot = {};
-    const editableFields = ['title', 'comment', 'suggestion', 'severity', 'category'];
+    const editableFields = ['title', 'comment', 'suggestion', 'severity', 'category', 'startLine', 'endLine', 'file'];
     for (const field of editableFields) {
       if (updates[field] !== undefined && updates[field] !== item[field]) {
         snapshot[field] = item[field];

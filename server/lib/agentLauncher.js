@@ -245,10 +245,11 @@ Response JSON format:
   "updatedItem": null
 }
 
-If the feedback should be revised, set updatedItem to an object with ONLY the changed fields:
+If the feedback should be revised, set updatedItem to an object with ONLY the changed fields.
+Editable fields: title, comment, suggestion, severity, category, startLine, endLine, file.
 {
   "response": "Your answer...",
-  "updatedItem": { "comment": "revised comment...", "severity": "low" }
+  "updatedItem": { "comment": "revised comment...", "startLine": 42, "endLine": 45 }
 }
 
 CRITICAL RULES:
