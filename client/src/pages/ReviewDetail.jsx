@@ -159,8 +159,8 @@ export default function ReviewDetail() {
   if (!review) return <div className="empty-state">Review not found</div>;
 
   const { metadata, feedback, risk, overview } = review;
-  const isFailed = metadata.status === 'review_failed';
-  const isRequested = metadata.status === 'review_requested';
+  const isFailed = metadata.status === 'agent_review_failed';
+  const isRequested = metadata.status === 'agent_review_requested';
   const items = feedback.items || [];
   const filtered = items.filter(i => {
     if (activeFile && i.file !== activeFile) return false;
@@ -203,14 +203,14 @@ export default function ReviewDetail() {
               )}
               {metadata.status && (
                 <span className={`badge ${
-                  metadata.status === 'review_failed' ? 'badge-high'
-                  : metadata.status === 'review_requested' ? 'status-pending'
-                  : metadata.status === 'pending_review' ? 'badge-low'
+                  metadata.status === 'agent_review_failed' ? 'badge-high'
+                  : metadata.status === 'agent_review_requested' ? 'status-pending'
+                  : metadata.status === 'agent_review_done' ? 'badge-low'
                   : 'badge-unknown'
                 }`} style={{ fontSize: 12 }}>
-                  {metadata.status === 'pending_review' ? 'review complete'
-                   : metadata.status === 'review_requested' ? 'reviewing...'
-                   : metadata.status === 'review_failed' ? 'review failed'
+                  {metadata.status === 'agent_review_done' ? 'review complete'
+                   : metadata.status === 'agent_review_requested' ? 'reviewing...'
+                   : metadata.status === 'agent_review_failed' ? 'review failed'
                    : metadata.status}
                 </span>
               )}

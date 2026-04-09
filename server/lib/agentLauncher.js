@@ -90,7 +90,7 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
     }
   }
 
-  // Write initial metadata with review_requested status
+  // Write initial metadata with agent_review_requested status
   await writeReview(repo, prId, {
     metadata: {
       prId,
@@ -101,7 +101,7 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
       targetBranch: '',
       url: prUrl,
       reviewedAt: new Date().toISOString(),
-      status: 'review_requested',
+      status: 'agent_review_requested',
     },
   });
 
@@ -650,7 +650,7 @@ async function markMetadataFailed(repo, prId, reason) {
   try {
     const review = await getReview(repo, prId);
     if (review?.metadata) {
-      review.metadata.status = 'review_failed';
+      review.metadata.status = 'agent_review_failed';
       review.metadata.failReason = reason;
       await writeReview(repo, prId, { metadata: review.metadata });
     }

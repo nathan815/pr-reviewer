@@ -75,7 +75,7 @@ $metadata = @{
   targetBranch = "{target branch}"
   url = "{PR URL}"
   reviewedAt = (Get-Date -Format o)
-  status = "review_requested"
+  status = "agent_review_requested"
 } | ConvertTo-Json
 Set-Content "$reviewDir\metadata.json" $metadata
 ```
@@ -162,7 +162,7 @@ Write the following files to `~/pr-reviews/{repo}/{prId}/`:
   "commitSha": "{HEAD commit SHA of the source branch at review time}",
   "changedFiles": ["src/file1.cs", "src/file2.cs"],
   "reviewedAt": "{ISO timestamp}",
-  "status": "pending_review"
+  "status": "agent_review_done"
 }
 ```
 Get the commit SHA and changed files list:
@@ -221,7 +221,7 @@ Remove the lockfile and update metadata status:
 ```powershell
 Remove-Item "$HOME\pr-reviews\{repo}\{prId}\.review.lock" -Force -ErrorAction SilentlyContinue
 ```
-Update `metadata.json` status from `review_requested` to `pending_review`.
+Update `metadata.json` — set status to `agent_review_done` unconditionally (it may have been changed to `agent_review_failed` by the server if it restarted mid-review, but since we completed successfully, override it back).
 
 Tell the user the review is ready and provide a link:
 ```

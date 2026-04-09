@@ -21,7 +21,7 @@ export default function Dashboard() {
 
   // Poll for updates when there are in-progress reviews
   useEffect(() => {
-    const hasRequested = reviews.some(r => r.status === 'review_requested');
+    const hasRequested = reviews.some(r => r.status === 'agent_review_requested');
     if (!hasRequested) return;
     const interval = setInterval(loadReviews, 5000);
     return () => clearInterval(interval);
@@ -124,10 +124,10 @@ export default function Dashboard() {
                   )}
                 </td>
                 <td>
-                  {r.status === 'review_requested' && (
+                  {r.status === 'agent_review_requested' && (
                     <span className="badge status-requested"><IconClock style={{ width: 12, height: 12 }} /> reviewing...</span>
                   )}
-                  {r.status === 'review_failed' && (
+                  {r.status === 'agent_review_failed' && (
                     <span className="badge badge-high"><IconX style={{ width: 12, height: 12 }} /> failed</span>
                   )}
                   {r.postedCount > 0 && (
