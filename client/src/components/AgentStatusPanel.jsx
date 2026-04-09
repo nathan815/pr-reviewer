@@ -240,7 +240,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
               <div className="agent-output-full" ref={outputRef}>
                 {agent.command && (
                   <details style={{ marginBottom: 8 }}>
-                    <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)' }}>Command</summary>
+                    <summary className="agent-output-label" style={{ cursor: 'pointer' }}>command</summary>
                     <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 11, padding: 8, background: 'var(--bg-primary)', borderRadius: 4, marginTop: 4 }}>{agent.command}</pre>
                   </details>
                 )}
@@ -297,7 +297,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
               <div className="agent-output-full">
                 {run.command && (
                   <details style={{ marginBottom: 8 }}>
-                    <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)' }}>Command</summary>
+                    <summary className="agent-output-label" style={{ cursor: 'pointer' }}>command</summary>
                     <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 11, padding: 8, background: 'var(--bg-primary)', borderRadius: 4, marginTop: 4 }}>{run.command}</pre>
                   </details>
                 )}
