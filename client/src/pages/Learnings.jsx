@@ -229,7 +229,10 @@ export default function Learnings() {
                     .slice()
                     .reverse()
                     .map((ex, i) => (
-                      <div key={i} className={`example-item example-${ex.decision}`}>
+                      <div
+                        key={i}
+                        className={`example-item example-${ex.decision}`}
+                      >
                         <div className="example-header">
                           <span className={`badge ${ex.decision === 'accepted' ? 'badge-low' : 'badge-high'}`}>
                             {ex.decision === 'accepted' ? '✓ Accepted' : '✗ Rejected'}
@@ -239,6 +242,14 @@ export default function Learnings() {
                           <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 'auto' }}>
                             {ex.repo} · {new Date(ex.timestamp).toLocaleDateString()}
                           </span>
+                          <Link
+                            to={`/review/${ex.repo}/${ex.prId}?highlight=${ex.feedbackId}`}
+                            target="_blank"
+                            className="example-link"
+                            title="View in context"
+                          >
+                            View in PR ↗
+                          </Link>
                         </div>
                         <div className="example-body">
                           <strong>{ex.title}</strong>

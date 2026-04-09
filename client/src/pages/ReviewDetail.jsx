@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import FeedbackCard from '../components/FeedbackCard';
 import RiskBadge from '../components/RiskBadge';
@@ -8,6 +8,8 @@ import ChangedFiles from '../components/ChangedFiles';
 
 export default function ReviewDetail() {
   const { repo, prId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const highlightId = searchParams.get('highlight');
   const [review, setReview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
@@ -26,7 +28,20 @@ export default function ReviewDetail() {
 
   useEffect(() => { loadReview(); }, [loadReview]);
 
-  const updateStatus = async (feedbackId, status, userNote) => {
+  useEffect(() => {
+    if (highlightId && review?.feedback) {
+      setTimeout(() => {
+        const el = document.getElementById(`feedback-${highlightId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('highlight-pulse');
+          setTimeout(() => el.classList.remove('highlight-pulse'), 3000);
+        }
+      }, 200);
+    }
+  }, [highlightId, review]);
+
+  const updateStatus= async (feedbackId, status, userNote) => {
     await fetch(`/api/reviews/${repo}/${prId}/feedback/${feedbackId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

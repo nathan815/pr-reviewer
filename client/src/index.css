@@ -631,6 +631,24 @@ a:hover { text-decoration: underline; }
   border-top: 1px dashed var(--border);
   background: rgba(88,166,255,0.04);
 }
+.example-item:hover { background: var(--card-bg); }
+.example-link {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.example-link:hover { text-decoration: underline; }
+
+/* Feedback highlight pulse */
+@keyframes highlightPulse {
+  0%, 100% { box-shadow: none; }
+  25% { box-shadow: 0 0 0 3px var(--accent); }
+  75% { box-shadow: 0 0 0 3px var(--accent); }
+}
+.highlight-pulse {
+  animation: highlightPulse 1.5s ease-in-out 2;
+}
 
 /* Modal */
 .modal-overlay {

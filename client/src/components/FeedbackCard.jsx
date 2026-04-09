@@ -37,7 +37,7 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onReject, onR
   };
 
   return (
-    <div className={`feedback-card severity-${item.severity}`}>
+    <div id={`feedback-${item.id}`} className={`feedback-card severity-${item.severity}`}>
       <div className="feedback-header">
         <div className="feedback-header-left">
           <span>{icon}</span>
