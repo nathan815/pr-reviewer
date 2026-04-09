@@ -1,5 +1,4 @@
 import fs from 'fs/promises';
-import { createWriteStream, readSync, statSync, openSync, closeSync } from 'node:fs';
 import { spawn } from 'child_process';
 import path from 'path';
 import os from 'os';
@@ -9,32 +8,6 @@ import { writeReview, getReview, addDiscussionMessage, updateFeedbackContent } f
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
 const REVIEWS_ROOT = path.join(os.homedir(), 'pr-reviews');
-
-// --- Log file helpers for detached agent output ---
-
-/** Read the last N bytes of a file synchronously (for status tails) */
-function readFileTailSync(filePath, bytes = 2048) {
-  try {
-    const s = statSync(filePath);
-    if (s.size === 0) return '';
-    const fd = openSync(filePath, 'r');
-    const len = Math.min(s.size, bytes);
-    const buf = Buffer.alloc(len);
-    readSync(fd, buf, 0, len, s.size - len);
-    closeSync(fd);
-    return buf.toString('utf-8');
-  } catch { return ''; }
-}
-
-/** Get file size without reading content */
-function getFileSize(filePath) {
-  try { return statSync(filePath).size; } catch { return 0; }
-}
-
-/** Read entire log file asynchronously (for full output view) */
-async function readLogFile(filePath) {
-  try { return await fs.readFile(filePath, 'utf-8'); } catch { return ''; }
-}
 
 // Track running agent processes: key = `${repo}/${prId}`
 const runningAgents = new Map();
@@ -133,39 +106,25 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
   });
 
   const { program, args, profileName } = await buildCommand(prUrl, extraPrompt);
-
-  // Build a single shell command string with proper quoting
   const shellCmd = [program, ...args.map(a => a.includes(' ') ? `"${a}"` : a)].join(' ');
 
-  // Set up log files for output persistence (survives server restarts)
-  const prDir = path.join(REVIEWS_ROOT, repo, String(prId));
-  await fs.mkdir(prDir, { recursive: true });
-  const stdoutLogPath = path.join(prDir, 'agent-stdout.log');
-  const stderrLogPath = path.join(prDir, 'agent-stderr.log');
-  const stdoutLog = createWriteStream(stdoutLogPath);
-  const stderrLog = createWriteStream(stderrLogPath);
-
-  // Spawn with pipes — agent survives server Ctrl+C on Windows (proven behavior)
-  const child = spawn(shellCmd, [], {
+  const child = spawn(program, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
-    shell: true,
     cwd: process.env.HOME || process.env.USERPROFILE,
   });
 
-  // Tee output to both in-memory and log files
   let stdout = '';
   let stderr = '';
-  child.stdout.on('data', d => { stdout += d.toString(); stdoutLog.write(d); });
-  child.stderr.on('data', d => { stderr += d.toString(); stderrLog.write(d); });
+  child.stdout.on('data', d => { stdout += d.toString(); });
+  child.stderr.on('data', d => { stderr += d.toString(); });
 
-  // Write lockfile with agent metadata and log file paths
+  // Write lockfile
   const lockData = {
     pid: child.pid,
     startedAt: new Date().toISOString(),
     prUrl,
     profileName,
     command: shellCmd,
-    logFiles: { stdout: stdoutLogPath, stderr: stderrLogPath },
   };
   await writeLock(lockPath, lockData);
 
@@ -179,7 +138,6 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
     profileName,
     command: shellCmd,
     startedAt: new Date().toISOString(),
-    logFiles: { stdout: stdoutLogPath, stderr: stderrLogPath },
     stdout: () => stdout,
     stderr: () => stderr,
   };
@@ -188,8 +146,6 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
   await persistAgentState(agentInfo);
 
   child.on('close', async (code) => {
-    stdoutLog.end();
-    stderrLog.end();
     agentInfo.status = code === 0 ? 'completed' : 'failed';
     agentInfo.exitCode = code;
     agentInfo.completedAt = new Date().toISOString();
@@ -200,8 +156,6 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
   });
 
   child.on('error', async (err) => {
-    stdoutLog.end();
-    stderrLog.end();
     agentInfo.status = 'failed';
     agentInfo.error = err.message;
     agentInfo.completedAt = new Date().toISOString();
@@ -420,9 +374,6 @@ export function getAgentStatuses() {
     if (typeof info.stdout === 'function') {
       stdout = info.stdout();
       stderr = typeof info.stderr === 'function' ? info.stderr() : '';
-    } else if (info.logFiles) {
-      stdout = readFileTailSync(info.logFiles.stdout);
-      stderr = readFileTailSync(info.logFiles.stderr);
     } else {
       stdout = info._stdout || '';
       stderr = info._stderr || '';
@@ -442,7 +393,7 @@ export function getAgentStatuses() {
       error: info.error || null,
       outputTail: stdout.slice(-500),
       stderrTail: stderr.slice(-500),
-      outputLength: info.logFiles ? getFileSize(info.logFiles.stdout) : stdout.length,
+      outputLength: stdout.length,
       agentType: 'review',
     });
   }
@@ -498,14 +449,8 @@ export function getAgentStatuses() {
 export async function getAgentOutputByKey(key) {
   // Helper to extract output from an agent info object
   const extract = async (info) => {
-    let stdout, stderr;
-    if (info.logFiles) {
-      stdout = await readLogFile(info.logFiles.stdout);
-      stderr = await readLogFile(info.logFiles.stderr);
-    } else {
-      stdout = typeof info.stdout === 'function' ? info.stdout() : (info._stdout || '');
-      stderr = typeof info.stderr === 'function' ? info.stderr() : (info._stderr || '');
-    }
+    const stdout = typeof info.stdout === 'function' ? info.stdout() : (info._stdout || '');
+    const stderr = typeof info.stderr === 'function' ? info.stderr() : (info._stderr || '');
     return { key, status: info.status, pid: info.pid, stdout, stderr };
   };
 
@@ -524,12 +469,7 @@ export async function getAgentOutputByKey(key) {
     const statePath = path.join(REVIEWS_ROOT, parts[0], parts[1], 'agent-state.json');
     try {
       const raw = await fs.readFile(statePath, 'utf-8');
-      const data = JSON.parse(raw);
-      if (data.logFiles) {
-        data.stdout = await readLogFile(data.logFiles.stdout);
-        data.stderr = await readLogFile(data.logFiles.stderr);
-      }
-      return data;
+      return JSON.parse(raw);
     } catch {}
   }
 
@@ -652,15 +592,10 @@ async function persistAgentState(info) {
     exitCode: info.exitCode ?? null,
     error: info.error || null,
   };
-  // For log file agents, store paths instead of inline output
-  if (info.logFiles) {
-    data.logFiles = info.logFiles;
-  } else {
-    const stdout = typeof info.stdout === 'function' ? info.stdout() : (info._stdout || '');
-    const stderr = typeof info.stderr === 'function' ? info.stderr() : (info._stderr || '');
-    data.stdout = stdout;
-    data.stderr = stderr;
-  }
+  const stdout = typeof info.stdout === 'function' ? info.stdout() : (info._stdout || '');
+  const stderr = typeof info.stderr === 'function' ? info.stderr() : (info._stderr || '');
+  data.stdout = stdout;
+  data.stderr = stderr;
   try {
     await fs.mkdir(path.dirname(statePath), { recursive: true });
     await fs.writeFile(statePath, JSON.stringify(data, null, 2), 'utf-8');
@@ -727,14 +662,8 @@ async function archiveAgentState(repo, prId) {
     const memInfo = runningAgents.get(key);
     let current;
     if (memInfo) {
-      let stdout, stderr;
-      if (memInfo.logFiles) {
-        stdout = await readLogFile(memInfo.logFiles.stdout);
-        stderr = await readLogFile(memInfo.logFiles.stderr);
-      } else {
-        stdout = typeof memInfo.stdout === 'function' ? memInfo.stdout() : (memInfo._stdout || '');
-        stderr = typeof memInfo.stderr === 'function' ? memInfo.stderr() : (memInfo._stderr || '');
-      }
+      const stdout = typeof memInfo.stdout === 'function' ? memInfo.stdout() : (memInfo._stdout || '');
+      const stderr = typeof memInfo.stderr === 'function' ? memInfo.stderr() : (memInfo._stderr || '');
       current = {
         key, repo, prId, prUrl: memInfo.prUrl, pid: memInfo.pid,
         status: memInfo.status, profileName: memInfo.profileName,
@@ -746,10 +675,6 @@ async function archiveAgentState(repo, prId) {
     } else {
       const raw = await fs.readFile(statePath, 'utf-8');
       current = JSON.parse(raw);
-      if (current.logFiles) {
-        current.stdout = await readLogFile(current.logFiles.stdout);
-        current.stderr = await readLogFile(current.logFiles.stderr);
-      }
     }
     current.archivedAt = new Date().toISOString();
     let history = [];
@@ -775,61 +700,32 @@ async function loadPersistedAgentStates() {
       for (const prId of prIds) {
         const prDir = path.join(repoPath, prId);
 
-        // Check for lockfile — detect orphaned agents that survived a server restart
+        // Clean up any stale lockfiles
         const lockPath = path.join(prDir, '.review.lock');
         const lockInfo = await readLock(lockPath);
-        const orphaned = lockInfo && isLockAlive(lockInfo);
+        if (lockInfo) removeLock(lockPath).catch(() => {});
 
-        if (orphaned) {
-          // Agent is still running! Create a shadow agent entry reading from log files.
+        // Load persisted state from agent-state.json
+        const statePath = path.join(prDir, 'agent-state.json');
+        try {
+          const raw = await fs.readFile(statePath, 'utf-8');
+          const data = JSON.parse(raw);
           const key = `${repo}/${prId}`;
-          const logFiles = lockInfo.logFiles || {
-            stdout: path.join(prDir, 'agent-stdout.log'),
-            stderr: path.join(prDir, 'agent-stderr.log'),
-          };
-          const agentInfo = {
-            pid: lockInfo.pid,
-            status: 'running',
-            repo,
-            prId: Number(prId),
-            prUrl: lockInfo.prUrl,
-            profileName: lockInfo.profileName || 'unknown',
-            command: lockInfo.command || null,
-            startedAt: lockInfo.startedAt,
-            orphaned: true,
-            logFiles,
-          };
-          runningAgents.set(key, agentInfo);
-          startOrphanPoller(key, agentInfo, lockPath);
-          console.log(`[agent] Re-attached to orphaned agent for ${key} (PID ${lockInfo.pid})`);
-        } else {
-          // No alive agent — load persisted state from agent-state.json
-          const statePath = path.join(prDir, 'agent-state.json');
-          try {
-            const raw = await fs.readFile(statePath, 'utf-8');
-            const data = JSON.parse(raw);
-            const key = `${repo}/${prId}`;
 
-            if (data.status === 'running') {
-              data.status = 'failed';
-              data.error = 'Server restarted while agent was running';
-              data.completedAt = new Date().toISOString();
-              await fs.writeFile(statePath, JSON.stringify(data, null, 2), 'utf-8');
-              await markMetadataFailed(repo, prId, 'Server restarted while agent was running');
-            }
-
-            runningAgents.set(key, {
-              ...data,
-              _stdout: data.stdout || '',
-              _stderr: data.stderr || '',
-            });
-          } catch { /* no agent-state.json, skip */ }
-
-          // Clean up stale lockfile if PID is dead
-          if (lockInfo && !isLockAlive(lockInfo)) {
-            removeLock(lockPath).catch(() => {});
+          if (data.status === 'running') {
+            data.status = 'failed';
+            data.error = 'Server restarted while agent was running';
+            data.completedAt = new Date().toISOString();
+            await fs.writeFile(statePath, JSON.stringify(data, null, 2), 'utf-8');
+            await markMetadataFailed(repo, prId, 'Server restarted while agent was running');
           }
-        }
+
+          runningAgents.set(key, {
+            ...data,
+            _stdout: data.stdout || '',
+            _stderr: data.stderr || '',
+          });
+        } catch { /* no agent-state.json, skip */ }
 
         // Load discussion agent states
         const discPath = path.join(prDir, 'discussion-agents.json');
@@ -855,34 +751,6 @@ async function loadPersistedAgentStates() {
   } catch (err) {
     console.error(`[agent] Error loading persisted states: ${err.message}`);
   }
-}
-
-/** Poll an orphaned agent (survived server restart) until it exits */
-function startOrphanPoller(key, agentInfo, lockPath) {
-  const interval = setInterval(async () => {
-    if (!isLockAlive({ pid: agentInfo.pid })) {
-      clearInterval(interval);
-      // Check metadata to determine if review completed successfully
-      try {
-        const review = await getReview(agentInfo.repo, agentInfo.prId);
-        if (review.metadata?.status === 'agent_review_done') {
-          agentInfo.status = 'completed';
-        } else {
-          agentInfo.status = 'failed';
-          agentInfo.error = 'Agent process exited';
-          await markMetadataFailed(agentInfo.repo, agentInfo.prId, 'Agent process exited');
-        }
-      } catch {
-        agentInfo.status = 'failed';
-        agentInfo.error = 'Agent process exited';
-      }
-      agentInfo.completedAt = new Date().toISOString();
-      agentInfo.orphaned = false;
-      await removeLock(lockPath).catch(() => {});
-      await persistAgentState(agentInfo);
-      console.log(`[agent] Orphaned agent ${key} ${agentInfo.status}`);
-    }
-  }, 10000);
 }
 
 // --- Curation Agent ---
