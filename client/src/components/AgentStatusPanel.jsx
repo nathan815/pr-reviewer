@@ -239,10 +239,10 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
             {expandedKey === agent.key && (
               <div className="agent-output-full" ref={outputRef}>
                 {agent.command && (
-                  <details style={{ marginBottom: 8 }}>
-                    <summary className="agent-output-label" style={{ cursor: 'pointer' }}>command</summary>
+                  <div style={{ marginBottom: 8 }}>
+                    <div className="agent-output-label">command</div>
                     <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 11, padding: 8, background: 'var(--bg-primary)', borderRadius: 4, marginTop: 4 }}>{agent.command}</pre>
-                  </details>
+                  </div>
                 )}
                 {fullOutput?.stderr && (
                   <div className="agent-stderr">
@@ -296,10 +296,10 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
             {expandedHistoryIdx === i && (
               <div className="agent-output-full">
                 {run.command && (
-                  <details style={{ marginBottom: 8 }}>
-                    <summary className="agent-output-label" style={{ cursor: 'pointer' }}>command</summary>
+                  <div style={{ marginBottom: 8 }}>
+                    <div className="agent-output-label">command</div>
                     <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 11, padding: 8, background: 'var(--bg-primary)', borderRadius: 4, marginTop: 4 }}>{run.command}</pre>
-                  </details>
+                  </div>
                 )}
                 {run.stdout && (
                   <div className="agent-stdout">
