@@ -159,6 +159,33 @@ export async function writeReview(repo, prId, { metadata, feedback, risk, overvi
   await Promise.all(writes);
 }
 
+/** Delete all feedback — moves feedback.json to deleted/ subfolder with timestamp */
+export async function deleteAllFeedback(repo, prId) {
+  const dir = reviewDir(repo, prId);
+  const feedbackPath = path.join(dir, 'feedback.json');
+
+  try {
+    await fs.access(feedbackPath);
+  } catch {
+    return { deleted: 0 };
+  }
+
+  const feedback = await readJson(feedbackPath);
+  const count = feedback.items?.length || 0;
+
+  // Move to deleted/ subfolder with timestamp
+  const deletedDir = path.join(dir, 'deleted');
+  await ensureDir(deletedDir);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  await fs.copyFile(feedbackPath, path.join(deletedDir, `feedback-${timestamp}.json`));
+
+  // Reset feedback.json to empty items
+  feedback.items = [];
+  await writeJson(feedbackPath, feedback);
+
+  return { deleted: count };
+}
+
 /** Update specific fields in metadata.json */
 export async function updateMetadata(repo, prId, updates) {
   const dir = reviewDir(repo, prId);

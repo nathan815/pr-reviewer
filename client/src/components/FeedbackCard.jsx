@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
 import RiskBadge from './RiskBadge';
 import CodeSnippet from './CodeSnippet';
+import { IconBug, IconLock, IconZap, IconPalette, IconRuler, IconTestTube, IconDocs, IconComment, IconCheck, IconX, IconSend, IconReset, IconNote, IconClock } from './Icons';
 
 const CATEGORY_ICONS = {
-  bug: '🐛',
-  security: '🔒',
-  performance: '⚡',
-  style: '🎨',
-  design: '📐',
-  testing: '🧪',
-  documentation: '📝',
+  bug: <IconBug />,
+  security: <IconLock />,
+  performance: <IconZap />,
+  style: <IconPalette />,
+  design: <IconRuler />,
+  testing: <IconTestTube />,
+  documentation: <IconDocs />,
 };
 
 export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onReject, onReset, onPost, onItemUpdated }) {
@@ -23,7 +24,7 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
   const [discussionStatus, setDiscussionStatus] = useState(null);
   const [showEditHistory, setShowEditHistory] = useState(false);
 
-  const icon = CATEGORY_ICONS[item.category] || '💬';
+  const icon = CATEGORY_ICONS[item.category] || <IconComment />;
   const isActionable = item.status === 'pending';
   const isAccepted = item.status === 'accepted';
   const isNoted = item.status === 'noted';
@@ -255,37 +256,37 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
               )}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-accept btn-sm" onClick={() => onAccept(noteText)}>✓ Accept</button>
-              <button className="btn btn-noted btn-sm" onClick={() => onNote(noteText)}>✓ Accept As Note</button>
-              <button className="btn btn-reject btn-sm" onClick={() => onReject(noteText)}>✗ Reject</button>
+              <button className="btn btn-accept btn-sm" onClick={() => onAccept(noteText)}><IconCheck /> Accept</button>
+              <button className="btn btn-noted btn-sm" onClick={() => onNote(noteText)}><IconCheck /> Accept As Note</button>
+              <button className="btn btn-reject btn-sm" onClick={() => onReject(noteText)}><IconX /> Reject</button>
             </div>
           </>
         )}
         {(isAccepted || isRejected || isNoted) && item.userNote && (
-          <div className="feedback-user-note">📝 {item.userNote}</div>
+          <div className="feedback-user-note"><IconNote /> {item.userNote}</div>
         )}
         {isAccepted && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button className="btn btn-post btn-sm" onClick={handlePost} disabled={postingThis}>
-              {postingThis ? '⏳ Posting...' : '📤 Post to ADO'}
+              {postingThis ? <><IconClock /> Posting...</> : <><IconSend /> Post to ADO</>}
             </button>
-            <button className="btn btn-sm" onClick={onReset}>↩ Reset</button>
+            <button className="btn btn-sm" onClick={onReset}><IconReset /> Reset</button>
           </div>
         )}
         {isNoted && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <span style={{ fontSize: 12, color: 'var(--text-muted)', padding: '3px 0' }}>Noted — won't post to ADO</span>
-            <button className="btn btn-sm" onClick={onReset}>↩ Reset</button>
+            <button className="btn btn-sm" onClick={onReset}><IconReset /> Reset</button>
           </div>
         )}
         {isRejected && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button className="btn btn-sm" onClick={onReset}>↩ Reconsider</button>
+            <button className="btn btn-sm" onClick={onReset}><IconReset /> Reconsider</button>
           </div>
         )}
         {isPosted && (
-          <span style={{ fontSize: 12, color: 'var(--text-muted)', padding: '3px 10px' }}>
-            ✅ Posted to ADO
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <IconCheck /> Posted to ADO
           </span>
         )}
       </div>

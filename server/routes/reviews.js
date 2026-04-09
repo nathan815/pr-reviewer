@@ -4,6 +4,7 @@ import {
   getReview,
   updateFeedbackStatus,
   batchUpdateFeedbackStatus,
+  deleteAllFeedback,
   readFileAtCommit,
   getExamplesSinceCuration,
   updateMetadata,
@@ -118,6 +119,16 @@ reviewsRouter.post('/:repo/:prId/feedback/batch-update', async (req, res) => {
     }
     const updated = await batchUpdateFeedbackStatus(req.params.repo, req.params.prId, ids, status);
     res.json({ updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete all feedback (moves to deleted/ subfolder)
+reviewsRouter.post('/:repo/:prId/feedback/delete-all', async (req, res) => {
+  try {
+    const result = await deleteAllFeedback(req.params.repo, req.params.prId);
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

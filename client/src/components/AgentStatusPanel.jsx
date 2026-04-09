@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import AnsiToHtml from 'ansi-to-html';
+import { IconCheck, IconX, IconStop, IconBot } from './Icons';
 
 const STATUS_ICONS = {
-  running: '🔄',
-  completed: '✅',
-  failed: '❌',
-  killed: '🛑',
+  completed: <IconCheck />,
+  failed: <IconX />,
+  killed: <IconStop />,
 };
 
 const ansiConverter = new AnsiToHtml({
@@ -38,7 +38,7 @@ function TruncatedCommand({ command }) {
   );
 }
 
-export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
+export default function AgentStatusPanel({ repo, prId, onRelaunched, filterTypes, maxItems }) {
   const [agents, setAgents] = useState([]);
   const [historyRuns, setHistoryRuns] = useState([]);
   const [expandedKey, setExpandedKey] = useState(null);
@@ -53,11 +53,12 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
   // Poll agent status
   useEffect(() => {
     const load = () => fetch('/api/agent/status').then(r => r.json()).then(all => {
-      const filtered = (repo && prId)
+      let filtered = (repo && prId)
         ? all.filter(a => a.repo === repo && String(a.prId) === String(prId))
         : all;
+      if (filterTypes) filtered = filtered.filter(a => filterTypes.includes(a.agentType || 'review'));
       const sorted = filtered.sort((a, b) => new Date(b.startedAt || 0) - new Date(a.startedAt || 0));
-      setAgents(sorted);
+      setAgents(maxItems ? sorted.slice(0, maxItems) : sorted);
     }).catch(() => {});
     load();
     const interval = setInterval(load, 3000);
@@ -129,11 +130,12 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
         await new Promise(r => setTimeout(r, 500));
         reloadHistory();
         fetch('/api/agent/status').then(r => r.json()).then(all => {
-          const filtered = (repo && prId)
+          let filtered = (repo && prId)
             ? all.filter(a => a.repo === repo && String(a.prId) === String(prId))
             : all;
+          if (filterTypes) filtered = filtered.filter(a => filterTypes.includes(a.agentType || 'review'));
           const sorted = filtered.sort((a, b) => new Date(b.startedAt || 0) - new Date(a.startedAt || 0));
-          setAgents(sorted);
+          setAgents(maxItems ? sorted.slice(0, maxItems) : sorted);
         }).catch(() => {});
       }
     } finally {
@@ -156,7 +158,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
 
   return (
     <div className="agent-panel">
-      <h3 className="agent-panel-title">🤖 Review Agents</h3>
+      <h3 className="agent-panel-title"><IconBot /> Review Agents</h3>
       <div className="agent-list">
         {/* Current agent(s) */}
         {agents.map(agent => (
@@ -169,7 +171,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
               <div className="agent-item-left">
                 {agent.status === 'running'
                   ? <span className="agent-spinner" />
-                  : <span className="agent-status-icon">{STATUS_ICONS[agent.status] || '❓'}</span>
+                  : <span className="agent-status-icon">{STATUS_ICONS[agent.status] || <IconBot />}</span>
                 }
                 <div>
                   <div className="agent-item-name">
@@ -291,7 +293,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
             >
               <div className="agent-item-left">
                 <span className="agent-status-icon">
-                  {STATUS_ICONS[run.status] || '·'}
+                  {STATUS_ICONS[run.status] || <IconBot />}
                 </span>
                 <div>
                   <div className="agent-item-name">{run.profileName || 'unknown'}</div>

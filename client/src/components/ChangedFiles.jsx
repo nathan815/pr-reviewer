@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { IconFile, IconFolder } from './Icons';
 
 export default function ChangedFiles({ files, feedbackItems, activeFile, onFileClick }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -42,7 +43,7 @@ function TreeNode({ node, activeFile, onFileClick, depth }) {
           onClick={() => setOpen(!open)}
         >
           <span className="file-tree-arrow">{open ? '▾' : '▸'}</span>
-          <span className="file-tree-icon">📁</span>
+          <span className="file-tree-icon"><IconFolder /></span>
           <span>{node.name}</span>
         </div>
         {open && node.children.map((child, i) => (
@@ -61,23 +62,13 @@ function TreeNode({ node, activeFile, onFileClick, depth }) {
       style={{ paddingLeft: 8 + depth * 14 }}
       onClick={() => onFileClick?.(node.path)}
     >
-      <span className="file-tree-icon">{fileIcon(node.name)}</span>
+      <span className="file-tree-icon"><IconFile ext={node.name.split('.').pop().toLowerCase()} /></span>
       <span className="file-tree-name">{node.name}</span>
       {count > 0 && (
         <span className="file-tree-badge">{count}</span>
       )}
     </div>
   );
-}
-
-function fileIcon(name) {
-  const ext = name.split('.').pop().toLowerCase();
-  const icons = {
-    cs: '🟣', ts: '🔷', tsx: '🔷', js: '🟡', jsx: '🟡',
-    py: '🐍', json: '📋', md: '📝', yaml: '⚙️', yml: '⚙️',
-    xml: '📄', css: '🎨', html: '🌐', ps1: '💠', sh: '🐚',
-  };
-  return icons[ext] || '📄';
 }
 
 function buildTree(files, feedbackItems) {

@@ -5,6 +5,7 @@ import FeedbackCard from '../components/FeedbackCard';
 import RiskBadge from '../components/RiskBadge';
 import AgentStatusPanel from '../components/AgentStatusPanel';
 import ChangedFiles from '../components/ChangedFiles';
+import { IconCheck, IconX, IconSend, IconTrash } from '../components/Icons';
 
 export default function ReviewDetail() {
   const { repo, prId } = useParams();
@@ -20,6 +21,8 @@ export default function ReviewDetail() {
   const [relaunchText, setRelaunchText] = useState('');
   const [activeFile, setActiveFile] = useState(null);
   const [adoInfo, setAdoInfo] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const feedbackRefs = useRef({});
 
   const loadReview = useCallback(() => {
@@ -116,6 +119,19 @@ export default function ReviewDetail() {
       body: JSON.stringify({ ids: pendingIds, status: 'accepted' }),
     });
     loadReview();
+  };
+
+  const deleteAllFeedback = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/reviews/${repo}/${prId}/feedback/delete-all`, { method: 'POST' });
+      if (res.ok) {
+        setShowDeleteConfirm(false);
+        loadReview();
+      }
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleRelaunch = async () => {
@@ -287,17 +303,39 @@ export default function ReviewDetail() {
           </h2>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn" onClick={acceptAll} disabled={!items.some(i => i.status === 'pending')}>
-              ✓ Accept All Pending
+              <IconCheck /> Accept All Pending
             </button>
             <button
               className="btn btn-post"
               onClick={postAllAccepted}
               disabled={posting || acceptedCount === 0}
             >
-              {posting ? 'Posting...' : `📤 Post ${acceptedCount} Accepted to ADO`}
+              {posting ? 'Posting...' : <><IconSend /> Post {acceptedCount} Accepted to ADO</>}
+            </button>
+            <button
+              className="btn btn-reject"
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={items.length === 0}
+              title="Delete all feedback"
+            >
+              <IconTrash />
             </button>
           </div>
         </div>
+
+        {showDeleteConfirm && (
+          <div className="card" style={{
+            borderColor: 'var(--red)', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          }}>
+            <span>Delete all {items.length} feedback items? They will be moved to a backup folder.</span>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <button className="btn btn-reject btn-sm" onClick={deleteAllFeedback} disabled={deleting}>
+                {deleting ? 'Deleting...' : 'Yes, Delete All'}
+              </button>
+              <button className="btn btn-sm" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+            </div>
+          </div>
+        )}
 
         {postResult && (
           <div className="card" style={{
@@ -305,10 +343,10 @@ export default function ReviewDetail() {
             marginBottom: 16
           }}>
             {postResult.error
-              ? `❌ ${postResult.error}`
+              ? <><IconX /> {postResult.error}</>
               : postResult.success
-                ? `✅ Successfully posted ${postResult.posted} comment(s) to ADO`
-                : `⚠️ Posted ${postResult.posted}, failed ${postResult.failed}: ${postResult.errors?.map(e => e.error).join('; ')}`
+                ? <><IconCheck /> Successfully posted {postResult.posted} comment(s) to ADO</>
+                : <>Posted {postResult.posted}, failed {postResult.failed}: {postResult.errors?.map(e => e.error).join('; ')}</>
             }
           </div>
         )}

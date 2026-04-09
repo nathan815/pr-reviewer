@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-
+import { IconComment } from './Icons';
 const CONTEXT_LINES = 5;
 
 export default function CodeSnippet({ repo, prId, file, startLine, endLine, commitSha, comment }) {
@@ -81,7 +81,7 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
         {/* Inline comment marker on target region */}
         {!expanded && comment && (
           <div className="code-inline-comment">
-            <span className="code-inline-comment-icon">💬</span>
+            <span className="code-inline-comment-icon"><IconComment /></span>
             <span>{comment}</span>
           </div>
         )}

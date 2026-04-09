@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-
+import { IconSearch, IconCheck, IconX, IconClock, IconRocket } from './Icons';
 export default function NewReviewModal({ open, onClose, onLaunched }) {
   const [prUrl, setPrUrl] = useState('');
   const [extraPrompt, setExtraPrompt] = useState('');
@@ -61,7 +61,7 @@ export default function NewReviewModal({ open, onClose, onLaunched }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>🔍 New PR Review</h2>
+          <h2><IconSearch /> New PR Review</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
@@ -112,15 +112,15 @@ export default function NewReviewModal({ open, onClose, onLaunched }) {
           </div>
 
           {error && (
-            <div className="modal-error">❌ {error}</div>
+            <div className="modal-error"><IconX /> {error}</div>
           )}
 
           {result && (
             <div className="modal-success">
               {result.status === 'launched'
-                ? `✅ Review agent launched (PID ${result.pid}, profile: ${result.profileName})`
+                ? <><IconCheck /> Review agent launched (PID {result.pid}, profile: {result.profileName})</>
                 : result.status === 'already_running'
-                  ? `⚠️ A review agent is already running for this PR (PID ${result.pid})`
+                  ? `A review agent is already running for this PR (PID ${result.pid})`
                   : `Status: ${result.status}`
               }
             </div>
@@ -134,7 +134,7 @@ export default function NewReviewModal({ open, onClose, onLaunched }) {
             onClick={handleLaunch}
             disabled={launching || !prUrl.trim() || !!result}
           >
-            {launching ? '⏳ Launching...' : '🚀 Launch Review'}
+            {launching ? <><IconClock /> Launching...</> : <><IconRocket /> Launch Review</>}
           </button>
         </div>
       </div>

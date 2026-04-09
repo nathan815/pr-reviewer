@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import AnsiToHtml from 'ansi-to-html';
+import { IconChart, IconBrain, IconCheck, IconX, IconNote } from '../components/Icons';
 
 const ansiConverter = new AnsiToHtml({
   fg: '#e6edf3', bg: '#0d1117',
@@ -63,13 +64,13 @@ export default function Learnings() {
 
       <div className="overview-section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1 style={{ fontSize: 22, margin: 0 }}>📊 Learnings & Guidelines</h1>
+          <h1 style={{ fontSize: 22, margin: 0 }}><IconChart /> Learnings & Guidelines</h1>
           <button
             className="btn btn-rerun"
             onClick={handleCurate}
             disabled={launching || curationStatus?.status === 'running'}
           >
-            {curationStatus?.status === 'running' ? '🔄 Curating…' : '🧠 Run Curation'}
+            {curationStatus?.status === 'running' ? 'Curating…' : <><IconBrain /> Run Curation</>}
           </button>
         </div>
       </div>
@@ -113,8 +114,8 @@ export default function Learnings() {
               <div key={cat} className="risk-card">
                 <h4 style={{ textTransform: 'capitalize' }}>{cat}</h4>
                 <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
-                  <span style={{ color: 'var(--green)' }}>✓ {counts.accepted} accepted</span>
-                  <span style={{ color: 'var(--red)' }}>✗ {counts.rejected} rejected</span>
+                  <span style={{ color: 'var(--green)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconCheck style={{ width: 12, height: 12 }} /> {counts.accepted} accepted</span>
+                  <span style={{ color: 'var(--red)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconX style={{ width: 12, height: 12 }} /> {counts.rejected} rejected</span>
                 </div>
               </div>
             ))}
@@ -235,7 +236,7 @@ export default function Learnings() {
                       >
                         <div className="example-header">
                           <span className={`badge ${ex.decision === 'rejected' ? 'badge-high' : ex.decision === 'noted' ? 'status-noted' : 'badge-low'}`}>
-                            {ex.decision === 'accepted' ? '✓ Accepted' : ex.decision === 'noted' ? '✓ Noted' : '✗ Rejected'}
+                            {ex.decision === 'accepted' ? <><IconCheck style={{ width: 12, height: 12 }} /> Accepted</> : ex.decision === 'noted' ? <><IconCheck style={{ width: 12, height: 12 }} /> Noted</> : <><IconX style={{ width: 12, height: 12 }} /> Rejected</>}
                           </span>
                           <span className="badge" style={{ textTransform: 'capitalize' }}>{ex.category}</span>
                           <span className="badge">{ex.severity}</span>
@@ -261,7 +262,7 @@ export default function Learnings() {
                           )}
                         </div>
                         {ex.userNote && (
-                          <div className="example-note">📝 {ex.userNote}</div>
+                          <div className="example-note"><IconNote style={{ width: 12, height: 12 }} /> {ex.userNote}</div>
                         )}
                       </div>
                     ))

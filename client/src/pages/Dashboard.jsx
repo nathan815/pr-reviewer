@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import RiskBadge from '../components/RiskBadge';
 import NewReviewModal from '../components/NewReviewModal';
 import AgentStatusPanel from '../components/AgentStatusPanel';
+import { IconSearch, IconClock, IconX } from '../components/Icons';
 
 export default function Dashboard() {
   const [reviews, setReviews] = useState([]);
@@ -36,14 +37,14 @@ export default function Dashboard() {
           Paste a PR URL to launch an automated review.
         </p>
         <button className="btn btn-post" onClick={() => setShowModal(true)}>
-          🔍 New Review
+          <IconSearch /> New Review
         </button>
         <NewReviewModal
           open={showModal}
           onClose={() => setShowModal(false)}
           onLaunched={() => { setTimeout(loadReviews, 1000); }}
         />
-        <AgentStatusPanel onRelaunched={loadReviews} />
+        <AgentStatusPanel filterTypes={['review', 'curation']} maxItems={5} onRelaunched={loadReviews} />
       </div>
     );
   }
@@ -58,7 +59,7 @@ export default function Dashboard() {
       <div className="toolbar" style={{ marginBottom: 20 }}>
         <div />
         <button className="btn btn-post" onClick={() => setShowModal(true)}>
-          🔍 New Review
+          <IconSearch /> New Review
         </button>
       </div>
 
@@ -68,7 +69,7 @@ export default function Dashboard() {
         onLaunched={() => { setTimeout(loadReviews, 1000); }}
       />
 
-      <AgentStatusPanel onRelaunched={loadReviews} />
+      <AgentStatusPanel filterTypes={['review', 'curation']} maxItems={5} onRelaunched={loadReviews} />
 
       <div className="stats-row">
         <div className="stat-box">
@@ -124,10 +125,10 @@ export default function Dashboard() {
                 </td>
                 <td>
                   {r.status === 'review_requested' && (
-                    <span className="badge status-requested">⏳ reviewing...</span>
+                    <span className="badge status-requested"><IconClock style={{ width: 12, height: 12 }} /> reviewing...</span>
                   )}
                   {r.status === 'review_failed' && (
-                    <span className="badge badge-high">❌ failed</span>
+                    <span className="badge badge-high"><IconX style={{ width: 12, height: 12 }} /> failed</span>
                   )}
                   {r.postedCount > 0 && (
                     <span className="badge status-posted">{r.postedCount} posted</span>
