@@ -506,7 +506,7 @@ a:hover { text-decoration: underline; }
   word-break: break-all;
   color: var(--text);
 }
-.agent-stderr pre { color: var(--red); }
+.agent-stderr pre { color: var(--text-muted); }
 
 /* Modal */
 .modal-overlay {
