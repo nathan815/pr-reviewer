@@ -18,6 +18,15 @@ const discussionAgents = new Map();
 // Load persisted agent states on module init
 await loadPersistedAgentStates();
 
+function buildSpawnEnv() {
+  return {
+    ...process.env,
+    FORCE_COLOR: process.env.FORCE_COLOR || '1',
+    CLICOLOR_FORCE: process.env.CLICOLOR_FORCE || '1',
+    TERM: process.env.TERM || 'xterm-256color',
+  };
+}
+
 async function loadConfig() {
   const raw = await fs.readFile(CONFIG_PATH, 'utf-8');
   return JSON.parse(raw);
@@ -105,12 +114,22 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
     },
   });
 
+  // Back up overview.md before agent run (agent will merge into it)
+  const prDir = path.join(REVIEWS_ROOT, repo, String(prId));
+  const overviewPath = path.join(prDir, 'overview.md');
+  try {
+    await fs.access(overviewPath);
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    await fs.copyFile(overviewPath, path.join(prDir, `overview-backup-${ts}.md`));
+  } catch { /* no existing overview, nothing to back up */ }
+
   const { program, args, profileName } = await buildCommand(prUrl, extraPrompt);
   const shellCmd = [program, ...args.map(a => a.includes(' ') ? `"${a}"` : a)].join(' ');
 
   const child = spawn(program, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
     cwd: process.env.HOME || process.env.USERPROFILE,
+    env: buildSpawnEnv(),
   });
 
   let stdout = '';
@@ -279,6 +298,7 @@ CRITICAL RULES:
     shell: false,
     detached: false,
     cwd: reviewDirPath,
+    env: buildSpawnEnv(),
   });
 
   let stdout = '';
@@ -849,7 +869,11 @@ export async function launchCurationAgent() {
   const displayCmd = `${profile.program} ${args.map(a => a === prompt ? '"<curation-prompt>"' : a).join(' ')}`;
 
   // Use spawn with args array to avoid Windows command-line length limit
-  const child = spawn(profile.program, args, { shell: false, cwd: os.homedir() });
+  const child = spawn(profile.program, args, {
+    shell: false,
+    cwd: os.homedir(),
+    env: buildSpawnEnv(),
+  });
 
   let stdout = '';
   let stderr = '';

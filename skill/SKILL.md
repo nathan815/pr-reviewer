@@ -26,7 +26,7 @@ $reviewDir = "$HOME\pr-reviews\{repo}\{prId}"
 
 # Check what already exists
 $hasMetadata = Test-Path "$reviewDir\metadata.json"
-$hasFeedback = Test-Path "$reviewDir\feedback.json"
+$hasFeedback = (Get-ChildItem "$reviewDir\feedback*.json" -ErrorAction SilentlyContinue).Count -gt 0
 $hasRisk = Test-Path "$reviewDir\risk-assessment.json"
 $hasOverview = Test-Path "$reviewDir\overview.md"
 $hasWorktree = Test-Path "$reviewDir\worktree\.git"
@@ -35,7 +35,7 @@ $hasLock = Test-Path "$reviewDir\.review.lock"
 
 If some files already exist from a prior run, **resume from where it left off** rather than redoing everything:
 - If worktree exists → skip Step 5
-- If feedback.json exists → skip the review (Step 9) unless user asked to re-review
+- If feedback files exist (feedback*.json) → skip the review (Step 9) unless user asked to re-review
 - If risk-assessment.json is missing but feedback exists → just write the missing files
 - If overview.md is missing → just write it
 - If a stale lockfile exists (process not alive), remove it and continue
@@ -180,7 +180,14 @@ $commitSha = git rev-parse HEAD
 $changedFiles = git diff {targetBranch}...HEAD --name-only
 ```
 
-#### feedback.json
+#### feedback-{timestamp}.json
+Each agent run writes its own feedback file using a timestamp (e.g., `feedback-20260409T203000Z.json`). The server merges all `feedback-*.json` files when displaying. This ensures re-runs never overwrite previous feedback.
+
+Generate the filename using the current UTC time:
+```
+feedback-{YYYYMMDD}T{HHMMSS}Z.json
+```
+
 Generate feedback items with unique IDs. Each item MUST include file path, line numbers, and the commit SHA being reviewed:
 ```json
 {
@@ -194,8 +201,8 @@ Generate feedback items with unique IDs. Each item MUST include file path, line 
       "severity": "high|medium|low|info",
       "category": "bug|security|performance|style|design|testing|documentation",
       "title": "Short descriptive title",
-      "comment": "Detailed explanation of the issue and why it matters.",
-      "suggestion": "Concrete suggestion for how to fix it. Include code if helpful.",
+      "comment": "Detailed explanation of the issue and why it matters. Use markdown formatting.",
+      "suggestion": "Concrete suggestion for how to fix it. For direct code replacements, use ADO suggestion blocks (see formatting notes below). For broader guidance, use regular markdown.",
       "status": "pending",
       "adoThreadId": null
     }
@@ -218,7 +225,7 @@ Generate feedback items with unique IDs. Each item MUST include file path, line 
 ```
 
 #### overview.md
-Write a human-readable summary covering:
+If `overview.md` already exists, **read it first** and integrate your new findings into the existing content — update sections, add new observations, revise the assessment if needed. Don't just append or replace; produce a coherent merged overview. If no overview exists, write a fresh one covering:
 - What the PR does (1-2 sentences)
 - Key changes and their impact
 - Overall assessment and recommendation
@@ -244,10 +251,29 @@ Overall risk: {risk level}
 - Always include file paths relative to repo root (no leading slash)
 - Line numbers must be from the NEW version of the file (right side of diff)
 - **Always verify line numbers with `grep -n`** before writing feedback — never rely on counting lines from file content
-- Be specific in comments — reference variable names, function names, etc.
+- Use markdown formatting in `comment` and `suggestion` fields — especially fenced code blocks (`` ```lang ``) for any code snippets, inline code (`` `name` ``) for identifiers
+- **ADO suggestion blocks**: When the suggestion is a direct, isolated code replacement for the lines in `startLine`–`endLine`, use the ADO suggestion code block format so reviewers can click "Apply Change" in ADO:
+  ````
+  ```suggestion
+  replacement code here (replaces startLine through endLine)
+  ```
+  ````
+  Only use this for self-contained replacements that map cleanly to the line range. For broader refactoring advice, multi-location changes, or conceptual guidance, use regular markdown instead.
 - Provide actionable suggestions, not just problem descriptions
 - Severity guide:
   - **high**: Bugs, security issues, data loss risks
   - **medium**: Performance issues, design concerns, missing error handling
   - **low**: Style issues, minor improvements
   - **info**: Observations, questions, positive feedback
+
+## Tone & Voice
+These comments will be posted as PR review comments under the user's name. They must read like a real human teammate wrote them — not a linter or a bot.
+
+- **Be conversational**, not formal. Write like you're talking to a colleague, not writing a report.
+- Use contractions (don't, isn't, won't) and casual phrasing where natural.
+- Avoid stiff/robotic patterns like "This code does X. Consider doing Y instead." — instead say something like "Looks like this might swallow the exception silently — worth adding a log here so we'd notice if it fails?"
+- Ask questions when appropriate: "Is there a reason we're not retrying here?" reads better than "Missing retry logic."
+- It's fine to acknowledge the author's intent: "I see what you're going for here, but..." or "Nice approach — one thing I'd tweak..."
+- Keep it concise. Don't over-explain obvious things. A senior dev is reading this.
+- Don't start every comment with "This" or "The". Vary your sentence openings.
+- Avoid phrases like "It is recommended", "One should consider", "This could potentially" — just say what you mean directly.

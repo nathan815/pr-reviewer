@@ -195,10 +195,6 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched, filterTypes
               </div>
             </div>
 
-            {agent.error && (
-              <div className="agent-error">{agent.error}</div>
-            )}
-
             {/* Action buttons - only on PR detail page */}
             {repo && (agent.status === 'running' || agent.status === 'failed') && (
             <div style={{ padding: '6px 16px', borderTop: '1px solid var(--border)' }}>
@@ -266,6 +262,9 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched, filterTypes
             {/* Expanded: full output */}
             {expandedKey === agent.key && (
               <div className="agent-output-full" ref={outputRef}>
+                {agent.error && (
+                  <div className="agent-error">{agent.error}</div>
+                )}
                 {agent.command && <TruncatedCommand command={agent.command} />}
                 {fullOutput?.stderr && (
                   <div className="agent-stderr">
@@ -312,12 +311,11 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched, filterTypes
               </div>
             </div>
 
-            {run.error && (
-              <div className="agent-error">{run.error}</div>
-            )}
-
             {expandedHistoryIdx === i && (
               <div className="agent-output-full">
+                {run.error && (
+                  <div className="agent-error">{run.error}</div>
+                )}
                 {run.command && <TruncatedCommand command={run.command} />}
                 {run.stdout && (
                   <div className="agent-stdout">

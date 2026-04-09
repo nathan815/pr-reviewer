@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Markdown from 'react-markdown';
 import RiskBadge from './RiskBadge';
 import CodeSnippet from './CodeSnippet';
 import { IconBug, IconLock, IconZap, IconPalette, IconRuler, IconTestTube, IconDocs, IconComment, IconCheck, IconX, IconSend, IconReset, IconNote, IconClock } from './Icons';
@@ -146,10 +147,12 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
 
       <div className="feedback-body">
         {item.title && <strong style={{ display: 'block', marginBottom: 4 }}>{item.title}</strong>}
-        <div className="feedback-comment">{item.comment}</div>
-        {item.suggestion && (
-          <div className="feedback-suggestion">{item.suggestion}</div>
-        )}
+        <div className="feedback-comment">
+          <Markdown>{item.comment}</Markdown>
+          {item.suggestion && (
+            <Markdown>{`**Suggestion:**\n${item.suggestion}`}</Markdown>
+          )}
+        </div>
       </div>
 
       {item.file && item.startLine && repo && prId && (
@@ -203,7 +206,7 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
                 {msg.role === 'user' ? 'You' : 'Agent'} · {new Date(msg.timestamp).toLocaleTimeString()}
               </div>
-              <div style={{ whiteSpace: 'pre-wrap' }}>{msg.message}</div>
+              <div className="feedback-comment" style={{ fontSize: 13 }}><Markdown>{msg.message}</Markdown></div>
             </div>
           ))}
           {discussing && (

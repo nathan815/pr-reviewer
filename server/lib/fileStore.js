@@ -33,6 +33,61 @@ function reviewDir(repo, prId) {
   return path.join(REVIEWS_ROOT, repo, String(prId));
 }
 
+// Cache: maps feedbackId -> filePath per PR directory
+const feedbackFileCache = new Map(); // key = dir, value = Map(itemId -> filePath)
+
+/** Read all feedback files (feedback.json + feedback-*.json) and merge items */
+async function readAllFeedback(dir) {
+  const items = [];
+  const fileMap = new Map(); // itemId -> filePath for updates
+  try {
+    const files = await fs.readdir(dir);
+    const feedbackFiles = files.filter(f => f === 'feedback.json' || (f.startsWith('feedback-') && f.endsWith('.json')));
+    // Sort so latest run files come last (items from later runs appear after earlier ones)
+    feedbackFiles.sort();
+    for (const file of feedbackFiles) {
+      const filePath = path.join(dir, file);
+      try {
+        const data = await readJson(filePath);
+        const fileItems = data.items || [];
+        for (const item of fileItems) {
+          items.push(item);
+          fileMap.set(item.id, filePath);
+        }
+      } catch { /* skip malformed files */ }
+    }
+  } catch {}
+  // Update cache
+  feedbackFileCache.set(dir, fileMap);
+  return { items, fileMap };
+}
+
+/** Find which feedback file contains an item, using cache with fallback re-scan */
+async function findFeedbackFile(dir, feedbackId) {
+  // Try cache first
+  const cached = feedbackFileCache.get(dir);
+  if (cached?.has(feedbackId)) return cached.get(feedbackId);
+  // Cache miss — re-scan
+  const { fileMap } = await readAllFeedback(dir);
+  const filePath = fileMap.get(feedbackId);
+  if (!filePath) throw new Error(`Feedback item ${feedbackId} not found`);
+  return filePath;
+}
+
+/** Find which feedback file contains an item and update it */
+async function updateFeedbackItem(dir, feedbackId, updateFn) {
+  const filePath = await findFeedbackFile(dir, feedbackId);
+
+  return withFileLock(filePath, async () => {
+    const feedback = await readJson(filePath);
+    const item = feedback.items.find(i => i.id === feedbackId);
+    if (!item) throw new Error(`Feedback item ${feedbackId} not found`);
+    const result = updateFn(item);
+    await writeJson(filePath, feedback);
+    return result !== undefined ? result : item;
+  });
+}
+
 /** List all reviewed PRs across all repos */
 export async function listAllReviews() {
   const reviews = [];
@@ -51,17 +106,17 @@ export async function listAllReviews() {
 
         try {
           const metadata = await readJson(path.join(prPath, 'metadata.json'));
-          const feedback = await readJson(path.join(prPath, 'feedback.json')).catch(() => ({ items: [] }));
+          const { items } = await readAllFeedback(prPath);
           const risk = await readJson(path.join(prPath, 'risk-assessment.json')).catch(() => ({ overallRisk: 'unknown', areas: [] }));
 
           reviews.push({
             repo,
             prId: Number(prId),
             ...metadata,
-            feedbackCount: feedback.items?.length || 0,
-            pendingCount: feedback.items?.filter(i => i.status === 'pending').length || 0,
-            acceptedCount: feedback.items?.filter(i => i.status === 'accepted').length || 0,
-            postedCount: feedback.items?.filter(i => i.status === 'posted').length || 0,
+            feedbackCount: items.length,
+            pendingCount: items.filter(i => i.status === 'pending').length,
+            acceptedCount: items.filter(i => i.status === 'accepted').length,
+            postedCount: items.filter(i => i.status === 'posted').length,
             overallRisk: risk.overallRisk,
           });
         } catch {
@@ -78,27 +133,22 @@ export async function listAllReviews() {
 /** Get full review data for a single PR */
 export async function getReview(repo, prId) {
   const dir = reviewDir(repo, prId);
-  const [metadata, feedback, risk, overview] = await Promise.all([
+  const [metadata, feedbackResult, risk, overview] = await Promise.all([
     readJson(path.join(dir, 'metadata.json')),
-    readJson(path.join(dir, 'feedback.json')).catch(() => ({ items: [] })),
+    readAllFeedback(dir),
     readJson(path.join(dir, 'risk-assessment.json')).catch(() => ({ overallRisk: 'unknown', areas: [] })),
     fs.readFile(path.join(dir, 'overview.md'), 'utf-8').catch(() => ''),
   ]);
-  return { repo, prId: Number(prId), metadata, feedback, risk, overview };
+  return { repo, prId: Number(prId), metadata, feedback: { items: feedbackResult.items }, risk, overview };
 }
 
 /** Update the status of a single feedback item */
 export async function updateFeedbackStatus(repo, prId, feedbackId, newStatus, userNote) {
   const dir = reviewDir(repo, prId);
-  const feedbackPath = path.join(dir, 'feedback.json');
-  const feedback = await readJson(feedbackPath);
-
-  const item = feedback.items.find(i => i.id === feedbackId);
-  if (!item) throw new Error(`Feedback item ${feedbackId} not found`);
-
-  item.status = newStatus;
-  if (userNote !== undefined) item.userNote = userNote;
-  await writeJson(feedbackPath, feedback);
+  const item = await updateFeedbackItem(dir, feedbackId, (item) => {
+    item.status = newStatus;
+    if (userNote !== undefined) item.userNote = userNote;
+  });
 
   // Record learning example on accept/noted/reject
   if (newStatus === 'accepted' || newStatus === 'noted' || newStatus === 'rejected') {
@@ -116,33 +166,37 @@ export async function updateFeedbackStatus(repo, prId, feedbackId, newStatus, us
 /** Update feedback item with ADO thread ID after posting */
 export async function markFeedbackPosted(repo, prId, feedbackId, adoThreadId) {
   const dir = reviewDir(repo, prId);
-  const feedbackPath = path.join(dir, 'feedback.json');
-  const feedback = await readJson(feedbackPath);
-
-  const item = feedback.items.find(i => i.id === feedbackId);
-  if (!item) throw new Error(`Feedback item ${feedbackId} not found`);
-
-  item.status = 'posted';
-  item.adoThreadId = adoThreadId;
-  await writeJson(feedbackPath, feedback);
-  return item;
+  return updateFeedbackItem(dir, feedbackId, (item) => {
+    item.status = 'posted';
+    item.adoThreadId = adoThreadId;
+  });
 }
 
 /** Batch update: set multiple feedback items to a status */
 export async function batchUpdateFeedbackStatus(repo, prId, feedbackIds, newStatus) {
   const dir = reviewDir(repo, prId);
-  const feedbackPath = path.join(dir, 'feedback.json');
-  const feedback = await readJson(feedbackPath);
+  const { fileMap } = await readAllFeedback(dir);
+
+  // Group IDs by source file
+  const byFile = new Map();
+  for (const id of feedbackIds) {
+    const filePath = fileMap.get(id);
+    if (!filePath) continue;
+    if (!byFile.has(filePath)) byFile.set(filePath, []);
+    byFile.get(filePath).push(id);
+  }
 
   const updated = [];
-  for (const id of feedbackIds) {
-    const item = feedback.items.find(i => i.id === id);
-    if (item) {
-      item.status = newStatus;
-      updated.push(item);
-    }
+  for (const [filePath, ids] of byFile) {
+    await withFileLock(filePath, async () => {
+      const feedback = await readJson(filePath);
+      for (const id of ids) {
+        const item = feedback.items.find(i => i.id === id);
+        if (item) { item.status = newStatus; updated.push(item); }
+      }
+      await writeJson(filePath, feedback);
+    });
   }
-  await writeJson(feedbackPath, feedback);
   return updated;
 }
 
@@ -162,26 +216,21 @@ export async function writeReview(repo, prId, { metadata, feedback, risk, overvi
 /** Delete all feedback — moves feedback.json to deleted/ subfolder with timestamp */
 export async function deleteAllFeedback(repo, prId) {
   const dir = reviewDir(repo, prId);
-  const feedbackPath = path.join(dir, 'feedback.json');
+  const { items } = await readAllFeedback(dir);
+  const count = items.length;
+  if (count === 0) return { deleted: 0 };
 
-  try {
-    await fs.access(feedbackPath);
-  } catch {
-    return { deleted: 0 };
-  }
-
-  const feedback = await readJson(feedbackPath);
-  const count = feedback.items?.length || 0;
-
-  // Move to deleted/ subfolder with timestamp
+  // Move all feedback files to deleted/ subfolder
   const deletedDir = path.join(dir, 'deleted');
   await ensureDir(deletedDir);
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  await fs.copyFile(feedbackPath, path.join(deletedDir, `feedback-${timestamp}.json`));
 
-  // Reset feedback.json to empty items
-  feedback.items = [];
-  await writeJson(feedbackPath, feedback);
+  const files = await fs.readdir(dir);
+  const feedbackFiles = files.filter(f => f === 'feedback.json' || (f.startsWith('feedback-') && f.endsWith('.json')));
+  for (const file of feedbackFiles) {
+    await fs.copyFile(path.join(dir, file), path.join(deletedDir, `${file.replace('.json', '')}-${timestamp}.json`));
+    await fs.unlink(path.join(dir, file));
+  }
 
   return { deleted: count };
 }
@@ -227,15 +276,16 @@ export async function readFileAtCommit(repo, prId, filePath, commitSha) {
 /** Add a discussion message to a feedback item */
 export async function addDiscussionMessage(repo, prId, feedbackId, role, message) {
   const dir = reviewDir(repo, prId);
-  const feedbackPath = path.join(dir, 'feedback.json');
-  return withFileLock(feedbackPath, async () => {
-    const feedback = await readJson(feedbackPath);
+  const filePath = await findFeedbackFile(dir, feedbackId);
+
+  return withFileLock(filePath, async () => {
+    const feedback = await readJson(filePath);
     const item = feedback.items.find(i => i.id === feedbackId);
     if (!item) throw new Error(`Feedback item ${feedbackId} not found`);
     if (!item.discussion) item.discussion = [];
     const entry = { role, message, timestamp: new Date().toISOString() };
     item.discussion.push(entry);
-    await writeJson(feedbackPath, feedback);
+    await writeJson(filePath, feedback);
     return entry;
   });
 }
@@ -243,9 +293,10 @@ export async function addDiscussionMessage(repo, prId, feedbackId, role, message
 /** Update a feedback item's content fields and record edit history */
 export async function updateFeedbackContent(repo, prId, feedbackId, updates) {
   const dir = reviewDir(repo, prId);
-  const feedbackPath = path.join(dir, 'feedback.json');
-  return withFileLock(feedbackPath, async () => {
-    const feedback = await readJson(feedbackPath);
+  const filePath = await findFeedbackFile(dir, feedbackId);
+
+  return withFileLock(filePath, async () => {
+    const feedback = await readJson(filePath);
     const item = feedback.items.find(i => i.id === feedbackId);
     if (!item) throw new Error(`Feedback item ${feedbackId} not found`);
 
@@ -267,7 +318,7 @@ export async function updateFeedbackContent(repo, prId, feedbackId, updates) {
       });
     }
 
-    await writeJson(feedbackPath, feedback);
+    await writeJson(filePath, feedback);
     return item;
   });
 }
