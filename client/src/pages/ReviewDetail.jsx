@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import FeedbackCard from '../components/FeedbackCard';
 import RiskBadge from '../components/RiskBadge';
+import AgentStatusPanel from '../components/AgentStatusPanel';
 
 export default function ReviewDetail() {
   const { repo, prId } = useParams();
@@ -139,6 +140,9 @@ export default function ReviewDetail() {
         </div>
       </div>
 
+      {/* Agent Status for this PR */}
+      <AgentStatusPanel repo={repo} prId={prId} onRelaunched={loadReview} />
+
       {/* Overview */}
       {overview && (
         <div className="overview-section">
@@ -217,6 +221,8 @@ export default function ReviewDetail() {
             <FeedbackCard
               key={item.id}
               item={item}
+              repo={repo}
+              prId={prId}
               onAccept={() => updateStatus(item.id, 'accepted')}
               onReject={() => updateStatus(item.id, 'rejected')}
               onReset={() => updateStatus(item.id, 'pending')}

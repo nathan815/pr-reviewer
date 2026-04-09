@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import RiskBadge from './RiskBadge';
+import CodeSnippet from './CodeSnippet';
 
 const CATEGORY_ICONS = {
   bug: '🐛',
@@ -11,7 +12,7 @@ const CATEGORY_ICONS = {
   documentation: '📝',
 };
 
-export default function FeedbackCard({ item, onAccept, onReject, onReset, onPost }) {
+export default function FeedbackCard({ item, repo, prId, onAccept, onReject, onReset, onPost }) {
   const [postingThis, setPostingThis] = useState(false);
   const [error, setError] = useState(null);
 
@@ -62,6 +63,16 @@ export default function FeedbackCard({ item, onAccept, onReject, onReset, onPost
           <div className="feedback-suggestion">{item.suggestion}</div>
         )}
       </div>
+
+      {item.file && item.startLine && repo && prId && (
+        <CodeSnippet
+          repo={repo}
+          prId={prId}
+          file={item.file}
+          startLine={item.startLine}
+          endLine={item.endLine}
+        />
+      )}
 
       {error && (
         <div style={{

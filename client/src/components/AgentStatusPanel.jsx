@@ -22,7 +22,7 @@ function AnsiPre({ text }) {
   return <pre dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-export default function AgentStatusPanel({ onRelaunched }) {
+export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
   const [agents, setAgents] = useState([]);
   const [expandedAgent, setExpandedAgent] = useState(null);
   const [fullOutput, setFullOutput] = useState(null);
@@ -32,11 +32,16 @@ export default function AgentStatusPanel({ onRelaunched }) {
 
   // Poll agent status
   useEffect(() => {
-    const load = () => fetch('/api/agent/status').then(r => r.json()).then(setAgents).catch(() => {});
+    const load = () => fetch('/api/agent/status').then(r => r.json()).then(all => {
+      const filtered = (repo && prId)
+        ? all.filter(a => a.repo === repo && String(a.prId) === String(prId))
+        : all;
+      setAgents(filtered);
+    }).catch(() => {});
     load();
     const interval = setInterval(load, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [repo, prId]);
 
   // Poll full output for expanded agent
   useEffect(() => {
