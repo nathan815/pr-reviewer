@@ -206,8 +206,8 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
             </div>
           ))}
           {discussing && (
-            <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span className="spinning" style={{ display: 'inline-block' }}>🔄</span> Agent is thinking...
+            <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="discuss-spinner" /> Agent is thinking...
             </div>
           )}
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
