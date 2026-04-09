@@ -3,7 +3,8 @@
     "copilot-cli": {
       "program": "copilot",
       "args": [
-        "--model", "claude-opus-4.6",
+        "--model",
+        "claude-opus-4.6",
         "-p",
         "Use the /pr-review skill to review this PR. Spawn subagents for parallel file analysis where possible. PR URL: {{prUrl}}"
       ]
@@ -13,11 +14,12 @@
       "args": [
         "copilot",
         "--",
-        "--model", "claude-opus-4.6",
+        "--model",
+        "claude-opus-4.6",
         "-p",
         "Use the /pr-review skill to review this PR. Spawn subagents for parallel file analysis where possible. PR URL: {{prUrl}}"
       ]
     }
   },
-  "activeProfile": "copilot-cli"
+  "activeProfile": "agency"
 }

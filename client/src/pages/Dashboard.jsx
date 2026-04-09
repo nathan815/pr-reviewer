@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import RiskBadge from '../components/RiskBadge';
 import NewReviewModal from '../components/NewReviewModal';
+import AgentStatusPanel from '../components/AgentStatusPanel';
 
 export default function Dashboard() {
   const [reviews, setReviews] = useState([]);
@@ -42,6 +43,7 @@ export default function Dashboard() {
           onClose={() => setShowModal(false)}
           onLaunched={() => { setTimeout(loadReviews, 1000); }}
         />
+        <AgentStatusPanel />
       </div>
     );
   }
@@ -65,6 +67,8 @@ export default function Dashboard() {
         onClose={() => setShowModal(false)}
         onLaunched={() => { setTimeout(loadReviews, 1000); }}
       />
+
+      <AgentStatusPanel />
 
       <div className="stats-row">
         <div className="stat-box">

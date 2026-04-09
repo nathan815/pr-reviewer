@@ -309,6 +309,102 @@ a:hover { text-decoration: underline; }
 /* review_requested status */
 .status-requested { background: rgba(88,166,255,0.15); color: var(--accent); }
 
+/* Agent Status Panel */
+.agent-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+.agent-panel-title {
+  font-size: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.agent-list { }
+.agent-item {
+  border-bottom: 1px solid var(--border);
+}
+.agent-item:last-child { border-bottom: none; }
+.agent-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+}
+.agent-item-header:hover { background: var(--surface-hover); }
+.agent-item-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.agent-item-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.agent-status-icon { font-size: 16px; }
+.agent-status-icon.spinning {
+  display: inline-block;
+  animation: spin 1.5s linear infinite;
+}
+.agent-item-name { font-size: 14px; font-weight: 500; }
+.agent-item-meta { font-size: 12px; color: var(--text-muted); }
+.agent-expand { font-size: 10px; color: var(--text-muted); margin-left: 4px; }
+.agent-badge-running { background: rgba(88,166,255,0.15); color: var(--accent); }
+.agent-badge-completed { background: rgba(63,185,80,0.15); color: var(--green); }
+.agent-badge-failed { background: rgba(248,81,73,0.15); color: var(--red); }
+.agent-error {
+  padding: 6px 16px;
+  font-size: 13px;
+  color: var(--red);
+  background: rgba(248,81,73,0.06);
+}
+.agent-output-preview {
+  padding: 6px 16px 10px;
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 60px;
+  overflow: hidden;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+.agent-output-full {
+  max-height: 500px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+.agent-output-label {
+  position: sticky;
+  top: 0;
+  padding: 4px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.agent-stdout pre,
+.agent-stderr pre {
+  padding: 10px 16px;
+  margin: 0;
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text);
+}
+.agent-stderr pre { color: var(--red); }
+
 /* Modal */
 .modal-overlay {
   position: fixed;

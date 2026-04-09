@@ -123,10 +123,12 @@ export async function launchReviewAgent(prUrl) {
   return { repo, prId, status: 'launched', pid: child.pid, profileName };
 }
 
-/** Get status of all tracked agents */
+/** Get status of all tracked agents (includes last N chars of output) */
 export function getAgentStatuses() {
   const statuses = [];
   for (const [key, info] of runningAgents) {
+    const stdout = info.stdout();
+    const stderr = info.stderr();
     statuses.push({
       key,
       repo: info.repo,
@@ -139,9 +141,30 @@ export function getAgentStatuses() {
       completedAt: info.completedAt || null,
       exitCode: info.exitCode ?? null,
       error: info.error || null,
+      outputTail: stdout.slice(-500),
+      stderrTail: stderr.slice(-500),
+      outputLength: stdout.length,
     });
   }
   return statuses;
+}
+
+/** Get full output for a specific agent */
+export function getAgentOutput(repo, prId) {
+  const key = `${repo}/${prId}`;
+  const info = runningAgents.get(key);
+  if (!info) return null;
+  return {
+    key,
+    status: info.status,
+    pid: info.pid,
+    startedAt: info.startedAt,
+    completedAt: info.completedAt || null,
+    exitCode: info.exitCode ?? null,
+    error: info.error || null,
+    stdout: info.stdout(),
+    stderr: info.stderr(),
+  };
 }
 
 /** Get config (profiles + active) for the UI settings */

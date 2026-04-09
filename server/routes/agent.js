@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { launchReviewAgent, getAgentStatuses, getConfig, setActiveProfile } from '../lib/agentLauncher.js';
+import { launchReviewAgent, getAgentStatuses, getAgentOutput, getConfig, setActiveProfile } from '../lib/agentLauncher.js';
 
 export const agentRouter = Router();
 
@@ -20,6 +20,13 @@ agentRouter.post('/launch', async (req, res) => {
 // Get status of all running/completed agents
 agentRouter.get('/status', (_req, res) => {
   res.json(getAgentStatuses());
+});
+
+// Get full output for a specific agent
+agentRouter.get('/output/:repo/:prId', (req, res) => {
+  const output = getAgentOutput(req.params.repo, req.params.prId);
+  if (!output) return res.status(404).json({ error: 'No agent found for this PR' });
+  res.json(output);
 });
 
 // Get config (profiles)
