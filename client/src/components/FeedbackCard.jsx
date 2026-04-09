@@ -138,7 +138,7 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
         }}>
           <div style={{ marginBottom: 2 }}>Edited by {edit.editedBy} · {new Date(edit.editedAt).toLocaleString()}</div>
           {Object.entries(edit.previous).map(([field, val]) => (
-            <div key={field}><strong>{field}</strong> was: <em>{String(val).substring(0, 100)}{String(val).length > 100 ? '...' : ''}</em></div>
+            <div key={field}><strong>{field}</strong> was: <em style={{ whiteSpace: 'pre-wrap' }}>{String(val)}</em></div>
           ))}
         </div>
       ))}
