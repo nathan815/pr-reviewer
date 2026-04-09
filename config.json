@@ -1,0 +1,19 @@
+{
+  "reviewCommand": {
+    "program": "copilot-cli",
+    "args": [
+      "-p", "Review this PR and write review files to ~/pr-reviews following the skill in ~/pr-review-agent/skill/SKILL.md. PR URL: {{prUrl}}"
+    ]
+  },
+  "profiles": {
+    "copilot-cli": {
+      "program": "copilot-cli",
+      "args": ["-p", "Review this PR and write review files to ~/pr-reviews following the skill in ~/pr-review-agent/skill/SKILL.md. PR URL: {{prUrl}}"]
+    },
+    "agency": {
+      "program": "agency",
+      "args": ["run", "--skill", "~/pr-review-agent/skill/SKILL.md", "--input", "Review PR {{prUrl}}"]
+    }
+  },
+  "activeProfile": "copilot-cli"
+}

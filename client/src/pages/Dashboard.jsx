@@ -1,17 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import RiskBadge from '../components/RiskBadge';
+import NewReviewModal from '../components/NewReviewModal';
 
 export default function Dashboard() {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
 
-  useEffect(() => {
+  const loadReviews = useCallback(() => {
     fetch('/api/reviews')
       .then(r => r.json())
       .then(data => { setReviews(data); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
+
+  useEffect(() => { loadReviews(); }, [loadReviews]);
+
+  // Poll for updates when there are in-progress reviews
+  useEffect(() => {
+    const hasRequested = reviews.some(r => r.status === 'review_requested');
+    if (!hasRequested) return;
+    const interval = setInterval(loadReviews, 5000);
+    return () => clearInterval(interval);
+  }, [reviews, loadReviews]);
 
   if (loading) return <div className="loading">Loading reviews</div>;
 
@@ -19,11 +31,17 @@ export default function Dashboard() {
     return (
       <div className="empty-state">
         <h2>No PR reviews yet</h2>
-        <p style={{ marginTop: 8 }}>
-          Use the Copilot <code>/review-pr</code> skill to queue a PR for review.
-          <br />
-          Reviews will appear here once generated.
+        <p style={{ marginTop: 8, marginBottom: 16 }}>
+          Paste a PR URL to launch an automated review.
         </p>
+        <button className="btn btn-post" onClick={() => setShowModal(true)}>
+          🔍 New Review
+        </button>
+        <NewReviewModal
+          open={showModal}
+          onClose={() => setShowModal(false)}
+          onLaunched={() => { setTimeout(loadReviews, 1000); }}
+        />
       </div>
     );
   }
@@ -35,6 +53,19 @@ export default function Dashboard() {
 
   return (
     <>
+      <div className="toolbar" style={{ marginBottom: 20 }}>
+        <div />
+        <button className="btn btn-post" onClick={() => setShowModal(true)}>
+          🔍 New Review
+        </button>
+      </div>
+
+      <NewReviewModal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        onLaunched={() => { setTimeout(loadReviews, 1000); }}
+      />
+
       <div className="stats-row">
         <div className="stat-box">
           <div className="stat-value">{reviews.length}</div>
@@ -88,6 +119,9 @@ export default function Dashboard() {
                   )}
                 </td>
                 <td>
+                  {r.status === 'review_requested' && (
+                    <span className="badge status-requested">⏳ reviewing...</span>
+                  )}
                   {r.postedCount > 0 && (
                     <span className="badge status-posted">{r.postedCount} posted</span>
                   )}
