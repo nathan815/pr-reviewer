@@ -229,7 +229,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
             {/* Collapsed: show tail only while running */}
             {expandedKey !== agent.key && agent.status === 'running' && agent.outputTail && (
               <div className="agent-output-preview">
-                <AnsiPre text={agent.outputTail.split('\n').slice(-3).join('\n')} />
+                <AnsiPre text={agent.outputTail.trim().split('\n').slice(-3).join('\n')} />
               </div>
             )}
 
