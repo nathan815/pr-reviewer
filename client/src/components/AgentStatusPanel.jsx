@@ -168,7 +168,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
             </div>
 
             {agent.error && (
-              <div className="agent-error">❌ {agent.error}</div>
+              <div className="agent-error">{agent.error}</div>
             )}
 
             {/* Action buttons */}
@@ -261,7 +261,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
 
         {/* Past runs as separate rows */}
         {historyRuns.map((run, i) => (
-          <div key={`hist-${i}`} className={`agent-item agent-${run.status}`} style={{ opacity: 0.7 }}>
+          <div key={`hist-${i}`} className={`agent-item agent-${run.status}`}>
             <div
               className="agent-item-header"
               onClick={() => setExpandedHistoryIdx(expandedHistoryIdx === i ? null : i)}
@@ -275,7 +275,6 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
                   <div className="agent-item-name">{run.profileName || 'unknown'}</div>
                   <div className="agent-item-meta">
                     PID {run.pid} · {run.startedAt ? timeAgo(run.startedAt) : 'unknown'}
-                    {run.archivedAt && ` · archived ${timeAgo(run.archivedAt)}`}
                   </div>
                 </div>
               </div>
@@ -284,13 +283,12 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
                 {run.exitCode != null && run.exitCode !== 0 && (
                   <span className="badge badge-high">exit {run.exitCode}</span>
                 )}
-                <span className="badge" style={{ fontSize: 10, opacity: 0.6 }}>past run</span>
                 <span className="agent-expand">{expandedHistoryIdx === i ? '▼' : '▶'}</span>
               </div>
             </div>
 
             {run.error && (
-              <div className="agent-error">❌ {run.error}</div>
+              <div className="agent-error">{run.error}</div>
             )}
 
             {expandedHistoryIdx === i && (
