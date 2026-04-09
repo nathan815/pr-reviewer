@@ -11,7 +11,7 @@ export default function App() {
           <h1>🔍 PR Review Agent</h1>
           <nav style={{ display: 'flex', gap: 16 }}>
             <Link to="/">Dashboard</Link>
-            <Link to="/learnings">📊 Learnings</Link>
+            <Link to="/learnings">Learnings</Link>
           </nav>
         </div>
       </header>

@@ -11,10 +11,12 @@ const ansiConverter = new AnsiToHtml({
 export default function Learnings() {
   const [stats, setStats] = useState(null);
   const [guidelines, setGuidelines] = useState(null);
+  const [examples, setExamples] = useState(null);
   const [curationStatus, setCurationStatus] = useState(null);
   const [launching, setLaunching] = useState(false);
   const [activeTab, setActiveTab] = useState('guidelines');
   const [selectedRepo, setSelectedRepo] = useState(null);
+  const [exampleFilter, setExampleFilter] = useState('all');
 
   const loadData = () => {
     fetch('/api/learnings/stats').then(r => r.json()).then(setStats).catch(() => {});
@@ -160,6 +162,15 @@ export default function Learnings() {
               {repo}
             </button>
           ))}
+          <button
+            className={`filter-btn ${activeTab === 'examples' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('examples');
+              if (!examples) fetch('/api/learnings/examples').then(r => r.json()).then(setExamples).catch(() => {});
+            }}
+          >
+            Examples {stats ? `(${stats.total})` : ''}
+          </button>
         </div>
 
         {activeTab === 'guidelines' && (
@@ -182,6 +193,70 @@ export default function Learnings() {
               <div className="empty-state">
                 No repo-specific guidelines for {selectedRepo} yet.
               </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'examples' && (
+          <div className="overview-section">
+            {!examples || examples.length === 0 ? (
+              <div className="empty-state">No examples yet. Accept or reject some review feedback to start building learnings.</div>
+            ) : (
+              <>
+                <div className="filter-bar" style={{ marginBottom: 12 }}>
+                  {['all', 'accepted', 'rejected', 'with-notes'].map(f => {
+                    const count = f === 'all' ? examples.length
+                      : f === 'with-notes' ? examples.filter(e => e.userNote).length
+                      : examples.filter(e => e.decision === f).length;
+                    return (
+                      <button
+                        key={f}
+                        className={`filter-btn ${exampleFilter === f ? 'active' : ''}`}
+                        onClick={() => setExampleFilter(f)}
+                      >
+                        {f === 'with-notes' ? 'With Notes' : f.charAt(0).toUpperCase() + f.slice(1)} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="examples-list">
+                  {examples
+                    .filter(e => {
+                      if (exampleFilter === 'all') return true;
+                      if (exampleFilter === 'with-notes') return !!e.userNote;
+                      return e.decision === exampleFilter;
+                    })
+                    .slice()
+                    .reverse()
+                    .map((ex, i) => (
+                      <div key={i} className={`example-item example-${ex.decision}`}>
+                        <div className="example-header">
+                          <span className={`badge ${ex.decision === 'accepted' ? 'badge-low' : 'badge-high'}`}>
+                            {ex.decision === 'accepted' ? '✓ Accepted' : '✗ Rejected'}
+                          </span>
+                          <span className="badge" style={{ textTransform: 'capitalize' }}>{ex.category}</span>
+                          <span className="badge">{ex.severity}</span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 'auto' }}>
+                            {ex.repo} · {new Date(ex.timestamp).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="example-body">
+                          <strong>{ex.title}</strong>
+                          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{ex.comment}</div>
+                          {ex.file && (
+                            <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 4, fontFamily: 'monospace' }}>
+                              {ex.file}:{ex.startLine}
+                            </div>
+                          )}
+                        </div>
+                        {ex.userNote && (
+                          <div className="example-note">📝 {ex.userNote}</div>
+                        )}
+                      </div>
+                    ))
+                  }
+                </div>
+              </>
             )}
           </div>
         )}

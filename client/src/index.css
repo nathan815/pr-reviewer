@@ -604,6 +604,34 @@ a:hover { text-decoration: underline; }
 }
 .agent-stderr pre { color: var(--text-muted); }
 
+/* Learning examples */
+.examples-list { display: flex; flex-direction: column; gap: 10px; }
+.example-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.example-accepted { border-left: 3px solid var(--green); }
+.example-rejected { border-left: 3px solid var(--red); }
+.example-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.example-body { padding: 10px 14px; font-size: 14px; }
+.example-note {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-muted);
+  border-top: 1px dashed var(--border);
+  background: rgba(88,166,255,0.04);
+}
+
 /* Modal */
 .modal-overlay {
   position: fixed;
