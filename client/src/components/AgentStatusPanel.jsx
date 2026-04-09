@@ -30,6 +30,8 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
   const [killing, setKilling] = useState(null);
   const [relaunchPrompt, setRelaunchPrompt] = useState({});
   const [showRelaunchFor, setShowRelaunchFor] = useState(null);
+  const [showHistory, setShowHistory] = useState({});
+  const [historyData, setHistoryData] = useState({});
   const outputRef = useRef(null);
 
   // Poll agent status
@@ -106,6 +108,19 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
     }
   };
 
+  const toggleHistory = async (agent) => {
+    const k = agent.key;
+    if (showHistory[k]) {
+      setShowHistory(h => ({ ...h, [k]: false }));
+      return;
+    }
+    if (!historyData[k]) {
+      const data = await fetch(`/api/agent/history/${agent.repo}/${agent.prId}`).then(r => r.json()).catch(() => []);
+      setHistoryData(h => ({ ...h, [k]: data }));
+    }
+    setShowHistory(h => ({ ...h, [k]: true }));
+  };
+
   if (agents.length === 0) return null;
 
   return (
@@ -170,7 +185,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
                       setShowRelaunchFor(showRelaunchFor === agent.key ? null : agent.key);
                     }}
                   >
-                    Relaunch
+                    Retry Agent
                   </button>
                 )}
               </div>
@@ -196,7 +211,47 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
                   </div>
                 </div>
               )}
+              {historyData[agent.key]?.length > 0 && (
+                <button
+                  className="btn btn-sm"
+                  style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}
+                  onClick={e => { e.stopPropagation(); toggleHistory(agent); }}
+                >
+                  {showHistory[agent.key] ? '▼' : '▶'} Past Runs ({historyData[agent.key].length})
+                </button>
+              )}
+              {!historyData[agent.key] && agent.status !== 'running' && (
+                <button
+                  className="btn btn-sm"
+                  style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}
+                  onClick={e => { e.stopPropagation(); toggleHistory(agent); }}
+                >
+                  ▶ Past Runs
+                </button>
+              )}
             </div>
+
+            {/* Past runs */}
+            {showHistory[agent.key] && historyData[agent.key]?.map((run, i) => (
+              <div key={i} style={{ padding: '8px 16px', borderTop: '1px dashed var(--border)', fontSize: 12, color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+                  <span>{STATUS_ICONS[run.status] || '·'} {run.status}</span>
+                  <span>PID {run.pid}</span>
+                  <span>{run.profileName}</span>
+                  <span>{run.startedAt ? timeAgo(run.startedAt) : ''}</span>
+                  {run.exitCode != null && run.exitCode !== 0 && <span className="badge badge-high" style={{ fontSize: 11 }}>exit {run.exitCode}</span>}
+                </div>
+                {run.error && <div style={{ color: 'var(--red)', fontSize: 11 }}>{run.error}</div>}
+                {run.stdout && (
+                  <details style={{ marginTop: 4 }}>
+                    <summary style={{ cursor: 'pointer' }}>Output ({(run.stdout.length / 1024).toFixed(1)} KB)</summary>
+                    <div className="agent-output-preview" style={{ maxHeight: 200 }}>
+                      <AnsiPre text={run.stdout} />
+                    </div>
+                  </details>
+                )}
+              </div>
+            ))}
 
             {/* Collapsed: show tail */}
             {expandedAgent?.key !== agent.key && agent.outputTail && (

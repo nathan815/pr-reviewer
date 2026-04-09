@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { launchReviewAgent, getAgentStatuses, getAgentOutput, killAgent, getConfig, setActiveProfile, saveConfig } from '../lib/agentLauncher.js';
+import { launchReviewAgent, getAgentStatuses, getAgentOutput, getAgentHistory, killAgent, getConfig, setActiveProfile, saveConfig } from '../lib/agentLauncher.js';
 
 export const agentRouter = Router();
 
@@ -37,6 +37,12 @@ agentRouter.get('/output/:repo/:prId', async (req, res) => {
   const output = await getAgentOutput(req.params.repo, req.params.prId);
   if (!output) return res.status(404).json({ error: 'No agent found for this PR' });
   res.json(output);
+});
+
+// Get history of past agent runs for a PR
+agentRouter.get('/history/:repo/:prId', async (req, res) => {
+  const history = await getAgentHistory(req.params.repo, req.params.prId);
+  res.json(history);
 });
 
 // Get config (profiles)

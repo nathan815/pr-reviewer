@@ -72,6 +72,10 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
     if (existing.status === 'running' && !force) {
       return { repo, prId, status: 'already_running', pid: existing.pid };
     }
+    // Archive old run before replacing
+    if (force && existing.status !== 'running') {
+      await archiveAgentState(repo, prId);
+    }
   }
 
   // Check for lockfile from another process
@@ -230,6 +234,17 @@ export async function getAgentOutput(repo, prId) {
   }
 }
 
+/** Get history of past agent runs for a PR */
+export async function getAgentHistory(repo, prId) {
+  const historyPath = path.join(REVIEWS_ROOT, repo, String(prId), 'agent-history.json');
+  try {
+    const raw = await fs.readFile(historyPath, 'utf-8');
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
 /** Kill a running agent */
 export async function killAgent(repo, prId) {
   const key = `${repo}/${prId}`;
@@ -353,6 +368,23 @@ async function markMetadataFailed(repo, prId, reason) {
   } catch (err) {
     console.error(`[agent] Failed to mark metadata as failed for ${repo}/${prId}: ${err.message}`);
   }
+}
+
+/** Archive the current agent state to history before relaunching */
+async function archiveAgentState(repo, prId) {
+  const statePath = agentStatePath(repo, prId);
+  const historyPath = path.join(path.dirname(statePath), 'agent-history.json');
+  try {
+    const raw = await fs.readFile(statePath, 'utf-8');
+    const current = JSON.parse(raw);
+    let history = [];
+    try {
+      const histRaw = await fs.readFile(historyPath, 'utf-8');
+      history = JSON.parse(histRaw);
+    } catch {}
+    history.push(current);
+    await fs.writeFile(historyPath, JSON.stringify(history, null, 2), 'utf-8');
+  } catch {}
 }
 
 /** Load persisted agent states from disk on startup */
