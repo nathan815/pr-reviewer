@@ -311,6 +311,7 @@ CRITICAL RULES:
     stderr: () => stderr,
   };
   discussionAgents.set(key, agentInfo);
+  await persistDiscussionAgentState(agentInfo);
 
   child.on('close', async (code) => {
     agentInfo.status = code === 0 ? 'completed' : 'failed';
@@ -343,6 +344,7 @@ CRITICAL RULES:
       agentInfo.response = fallback;
     }
 
+    await persistDiscussionAgentState(agentInfo);
     console.log(`[discussion] ${key} ${agentInfo.status} (exit ${code})`);
   });
 
@@ -351,6 +353,7 @@ CRITICAL RULES:
     agentInfo.error = err.message;
     agentInfo.completedAt = new Date().toISOString();
     await addDiscussionMessage(repo, prId, feedbackId, 'agent', `Discussion agent failed: ${err.message}`);
+    await persistDiscussionAgentState(agentInfo);
     console.error(`[discussion] Failed for ${key}: ${err.message}`);
   });
 
@@ -576,6 +579,10 @@ function agentStatePath(repo, prId) {
   return path.join(REVIEWS_ROOT, repo, String(prId), 'agent-state.json');
 }
 
+function discussionAgentStatesPath(repo, prId) {
+  return path.join(REVIEWS_ROOT, repo, String(prId), 'discussion-agents.json');
+}
+
 async function persistAgentState(info) {
   const statePath = agentStatePath(info.repo, info.prId);
   const stdout = typeof info.stdout === 'function' ? info.stdout() : (info._stdout || '');
@@ -601,6 +608,41 @@ async function persistAgentState(info) {
     await fs.writeFile(statePath, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
     console.error(`[agent] Failed to persist state for ${info.repo}/${info.prId}: ${err.message}`);
+  }
+}
+
+async function persistDiscussionAgentState(info) {
+  const filePath = discussionAgentStatesPath(info.repo, info.prId);
+  const stdout = typeof info.stdout === 'function' ? info.stdout() : (info._stdout || '');
+  const stderr = typeof info.stderr === 'function' ? info.stderr() : (info._stderr || '');
+  const entry = {
+    key: info.key,
+    repo: info.repo,
+    prId: info.prId,
+    feedbackId: info.feedbackId,
+    pid: info.pid,
+    status: info.status,
+    command: info.command || null,
+    startedAt: info.startedAt,
+    completedAt: info.completedAt || null,
+    exitCode: info.exitCode ?? null,
+    error: info.error || null,
+    response: info.response || null,
+    stdout,
+    stderr,
+  };
+
+  try {
+    let agents = {};
+    try {
+      const raw = await fs.readFile(filePath, 'utf-8');
+      agents = JSON.parse(raw);
+    } catch { /* file doesn't exist yet */ }
+    agents[info.feedbackId] = entry;
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, JSON.stringify(agents, null, 2), 'utf-8');
+  } catch (err) {
+    console.error(`[discussion] Failed to persist state for ${info.key}: ${err.message}`);
   }
 }
 
@@ -687,9 +729,28 @@ async function loadPersistedAgentStates() {
             _stderr: data.stderr || '',
           });
         } catch { /* no agent-state.json, skip */ }
+
+        // Load discussion agent states
+        const discPath = path.join(repoPath, prId, 'discussion-agents.json');
+        try {
+          const raw = await fs.readFile(discPath, 'utf-8');
+          const agents = JSON.parse(raw);
+          for (const [feedbackId, data] of Object.entries(agents)) {
+            if (data.status === 'running') {
+              data.status = 'failed';
+              data.error = 'Server restarted while agent was running';
+              data.completedAt = new Date().toISOString();
+            }
+            discussionAgents.set(data.key, {
+              ...data,
+              _stdout: data.stdout || '',
+              _stderr: data.stderr || '',
+            });
+          }
+        } catch { /* no discussion-agents.json, skip */ }
       }
     }
-    console.log(`[agent] Loaded ${runningAgents.size} persisted agent state(s)`);
+    console.log(`[agent] Loaded ${runningAgents.size} review + ${discussionAgents.size} discussion persisted agent state(s)`);
   } catch (err) {
     console.error(`[agent] Error loading persisted states: ${err.message}`);
   }
