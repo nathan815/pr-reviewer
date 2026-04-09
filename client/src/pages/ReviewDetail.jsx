@@ -21,6 +21,7 @@ export default function ReviewDetail() {
   const [relaunchText, setRelaunchText] = useState('');
   const [activeFile, setActiveFile] = useState(null);
   const [adoInfo, setAdoInfo] = useState(null);
+  const [lockInfo, setLockInfo] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const feedbackRefs = useRef({});
@@ -47,6 +48,18 @@ export default function ReviewDetail() {
         }
       })
       .catch(() => {});
+  }, [repo, prId]);
+
+  // Poll lockfile status
+  useEffect(() => {
+    const loadLock = () =>
+      fetch(`/api/reviews/${repo}/${prId}/lock-status`)
+        .then(r => r.json())
+        .then(setLockInfo)
+        .catch(() => {});
+    loadLock();
+    const interval = setInterval(loadLock, 5000);
+    return () => clearInterval(interval);
   }, [repo, prId]);
 
   useEffect(() => {
@@ -212,6 +225,13 @@ export default function ReviewDetail() {
                    : metadata.status === 'agent_review_requested' ? 'reviewing...'
                    : metadata.status === 'agent_review_failed' ? 'review failed'
                    : metadata.status}
+                </span>
+              )}
+              {lockInfo?.locked && (
+                <span className={`badge ${lockInfo.alive ? 'status-pending' : 'badge-unknown'}`} style={{ fontSize: 12 }}>
+                  {lockInfo.alive
+                    ? <>agent running (PID {lockInfo.pid})</>
+                    : <>lock stale (PID {lockInfo.pid} dead)</>}
                 </span>
               )}
             </div>

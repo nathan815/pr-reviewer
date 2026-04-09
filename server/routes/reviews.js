@@ -1,4 +1,7 @@
 import { Router } from 'express';
+import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
 import {
   listAllReviews,
   getReview,
@@ -12,6 +15,7 @@ import {
 import { getPRDetails } from '../lib/adoClient.js';
 import { launchCurationAgent, getCurationStatus, launchDiscussionAgent, getDiscussionStatus } from '../lib/agentLauncher.js';
 
+const REVIEWS_ROOT = path.join(os.homedir(), 'pr-reviews');
 const AUTO_CURATE_THRESHOLD = 20; // auto-curate after this many new decisions
 
 export const reviewsRouter = Router();
@@ -34,6 +38,23 @@ reviewsRouter.get('/:repo/:prId', async (req, res) => {
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'Review not found' });
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Get lockfile status for a PR
+reviewsRouter.get('/:repo/:prId/lock-status', async (req, res) => {
+  const lockPath = path.join(REVIEWS_ROOT, req.params.repo, String(req.params.prId), '.review.lock');
+  try {
+    const raw = await fs.readFile(lockPath, 'utf-8');
+    const lock = JSON.parse(raw);
+    // Check if the process is still alive
+    let alive = false;
+    if (lock.pid) {
+      try { process.kill(lock.pid, 0); alive = true; } catch { /* not running */ }
+    }
+    res.json({ locked: true, alive, ...lock });
+  } catch {
+    res.json({ locked: false });
   }
 });
 
