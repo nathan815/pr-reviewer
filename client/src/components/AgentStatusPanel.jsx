@@ -143,7 +143,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
                   disabled={killing === agent.key}
                   onClick={(e) => { e.stopPropagation(); handleKill(agent); }}
                 >
-                  {killing === agent.key ? '⏳ Killing...' : '🛑 Kill'}
+                  {killing === agent.key ? 'Killing...' : 'Kill'}
                 </button>
               )}
               {agent.status !== 'running' && (
@@ -153,7 +153,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
                   disabled={relaunching === agent.key}
                   onClick={(e) => { e.stopPropagation(); handleRelaunch(agent); }}
                 >
-                  {relaunching === agent.key ? '⏳ Relaunching...' : '🔄 Relaunch'}
+                  {relaunching === agent.key ? 'Relaunching...' : 'Relaunch'}
                 </button>
               )}
             </div>

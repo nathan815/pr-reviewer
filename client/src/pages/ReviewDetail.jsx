@@ -162,7 +162,7 @@ export default function ReviewDetail() {
                 onClick={handleRelaunch}
                 disabled={relaunching}
               >
-                {relaunching ? '⏳ Launching…' : '↻ Re-run Review'}
+                {relaunching ? 'Launching…' : 'Re-run Review'}
               </button>
             )}
             <RiskBadge level={risk.overallRisk} />
