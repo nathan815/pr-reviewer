@@ -40,7 +40,8 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
       const filtered = (repo && prId)
         ? all.filter(a => a.repo === repo && String(a.prId) === String(prId))
         : all;
-      setAgents(filtered);
+      const sorted = filtered.sort((a, b) => new Date(b.startedAt || 0) - new Date(a.startedAt || 0));
+      setAgents(sorted);
     }).catch(() => {});
     load();
     const interval = setInterval(load, 3000);
@@ -52,7 +53,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
     if (!repo || !prId) return;
     fetch(`/api/agent/history/${repo}/${prId}`)
       .then(r => r.json())
-      .then(data => setHistoryRuns(Array.isArray(data) ? data : []))
+      .then(data => setHistoryRuns(Array.isArray(data) ? data.reverse() : []))
       .catch(() => {});
   }, [repo, prId]);
 
@@ -61,7 +62,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
     if (!repo || !prId) return;
     fetch(`/api/agent/history/${repo}/${prId}`)
       .then(r => r.json())
-      .then(data => setHistoryRuns(Array.isArray(data) ? data : []))
+      .then(data => setHistoryRuns(Array.isArray(data) ? data.reverse() : []))
       .catch(() => {});
   };
 
@@ -114,7 +115,8 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
           const filtered = (repo && prId)
             ? all.filter(a => a.repo === repo && String(a.prId) === String(prId))
             : all;
-          setAgents(filtered);
+          const sorted = filtered.sort((a, b) => new Date(b.startedAt || 0) - new Date(a.startedAt || 0));
+          setAgents(sorted);
         }).catch(() => {});
       }
     } finally {
