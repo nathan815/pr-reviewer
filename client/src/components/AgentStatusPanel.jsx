@@ -24,14 +24,14 @@ function AnsiPre({ text }) {
 
 export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
   const [agents, setAgents] = useState([]);
-  const [expandedAgent, setExpandedAgent] = useState(null);
+  const [historyRuns, setHistoryRuns] = useState([]);
+  const [expandedKey, setExpandedKey] = useState(null);
   const [fullOutput, setFullOutput] = useState(null);
+  const [expandedHistoryIdx, setExpandedHistoryIdx] = useState(null);
   const [relaunching, setRelaunching] = useState(null);
   const [killing, setKilling] = useState(null);
   const [relaunchPrompt, setRelaunchPrompt] = useState({});
   const [showRelaunchFor, setShowRelaunchFor] = useState(null);
-  const [showHistory, setShowHistory] = useState({});
-  const [historyData, setHistoryData] = useState({});
   const outputRef = useRef(null);
 
   // Poll agent status
@@ -47,11 +47,31 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
     return () => clearInterval(interval);
   }, [repo, prId]);
 
-  // Poll full output for expanded agent
+  // Load history once
   useEffect(() => {
-    if (!expandedAgent) { setFullOutput(null); return; }
+    if (!repo || !prId) return;
+    fetch(`/api/agent/history/${repo}/${prId}`)
+      .then(r => r.json())
+      .then(data => setHistoryRuns(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, [repo, prId]);
+
+  // Reload history after a relaunch (old run gets archived)
+  const reloadHistory = () => {
+    if (!repo || !prId) return;
+    fetch(`/api/agent/history/${repo}/${prId}`)
+      .then(r => r.json())
+      .then(data => setHistoryRuns(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  };
+
+  // Poll full output for expanded current agent
+  useEffect(() => {
+    if (!expandedKey) { setFullOutput(null); return; }
+    const agent = agents.find(a => a.key === expandedKey);
+    if (!agent) { setFullOutput(null); return; }
     const load = () =>
-      fetch(`/api/agent/output/${expandedAgent.repo}/${expandedAgent.prId}`)
+      fetch(`/api/agent/output/${agent.repo}/${agent.prId}`)
         .then(r => r.json())
         .then(data => {
           setFullOutput(data);
@@ -61,19 +81,9 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
         })
         .catch(() => {});
     load();
-    const interval = expandedAgent.status === 'running' ? setInterval(load, 2000) : null;
+    const interval = agent.status === 'running' ? setInterval(load, 2000) : null;
     return () => { if (interval) clearInterval(interval); };
-  }, [expandedAgent?.key, expandedAgent?.status]);
-
-  // Update expanded agent status from poll
-  useEffect(() => {
-    if (expandedAgent) {
-      const updated = agents.find(a => a.key === expandedAgent.key);
-      if (updated && updated.status !== expandedAgent.status) {
-        setExpandedAgent(updated);
-      }
-    }
-  }, [agents]);
+  }, [expandedKey, agents.find(a => a.key === expandedKey)?.status]);
 
   const handleRelaunch = async (agent) => {
     setRelaunching(agent.key);
@@ -91,6 +101,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
         setShowRelaunchFor(null);
         setRelaunchPrompt(p => { const n = {...p}; delete n[agent.key]; return n; });
         onRelaunched?.();
+        reloadHistory();
         fetch('/api/agent/status').then(r => r.json()).then(setAgents).catch(() => {});
       }
     } finally {
@@ -108,30 +119,19 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
     }
   };
 
-  const toggleHistory = async (agent) => {
-    const k = agent.key;
-    if (showHistory[k]) {
-      setShowHistory(h => ({ ...h, [k]: false }));
-      return;
-    }
-    if (!historyData[k]) {
-      const data = await fetch(`/api/agent/history/${agent.repo}/${agent.prId}`).then(r => r.json()).catch(() => []);
-      setHistoryData(h => ({ ...h, [k]: data }));
-    }
-    setShowHistory(h => ({ ...h, [k]: true }));
-  };
-
-  if (agents.length === 0) return null;
+  const hasContent = agents.length > 0 || historyRuns.length > 0;
+  if (!hasContent) return null;
 
   return (
     <div className="agent-panel">
       <h3 className="agent-panel-title">🤖 Review Agents</h3>
       <div className="agent-list">
+        {/* Current agent(s) */}
         {agents.map(agent => (
           <div key={agent.key} className={`agent-item agent-${agent.status}`}>
             <div
               className="agent-item-header"
-              onClick={() => setExpandedAgent(expandedAgent?.key === agent.key ? null : agent)}
+              onClick={() => setExpandedKey(expandedKey === agent.key ? null : agent.key)}
               style={{ cursor: 'pointer' }}
             >
               <div className="agent-item-left">
@@ -139,9 +139,9 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
                   {STATUS_ICONS[agent.status] || '❓'}
                 </span>
                 <div>
-                  <div className="agent-item-name">{agent.repo} #{agent.prId}</div>
+                  <div className="agent-item-name">{agent.profileName}</div>
                   <div className="agent-item-meta">
-                    {agent.profileName} · PID {agent.pid} · {timeAgo(agent.startedAt)}
+                    PID {agent.pid} · {timeAgo(agent.startedAt)}
                   </div>
                 </div>
               </div>
@@ -150,7 +150,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
                 {agent.exitCode !== null && agent.exitCode !== 0 && (
                   <span className="badge badge-high">exit {agent.exitCode}</span>
                 )}
-                <span className="agent-expand">{expandedAgent?.key === agent.key ? '▼' : '▶'}</span>
+                <span className="agent-expand">{expandedKey === agent.key ? '▼' : '▶'}</span>
               </div>
             </div>
 
@@ -211,57 +211,17 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
                   </div>
                 </div>
               )}
-              {historyData[agent.key]?.length > 0 && (
-                <button
-                  className="btn btn-sm"
-                  style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}
-                  onClick={e => { e.stopPropagation(); toggleHistory(agent); }}
-                >
-                  {showHistory[agent.key] ? '▼' : '▶'} Past Runs ({historyData[agent.key].length})
-                </button>
-              )}
-              {!historyData[agent.key] && agent.status !== 'running' && (
-                <button
-                  className="btn btn-sm"
-                  style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}
-                  onClick={e => { e.stopPropagation(); toggleHistory(agent); }}
-                >
-                  ▶ Past Runs
-                </button>
-              )}
             </div>
 
-            {/* Past runs */}
-            {showHistory[agent.key] && historyData[agent.key]?.map((run, i) => (
-              <div key={i} style={{ padding: '8px 16px', borderTop: '1px dashed var(--border)', fontSize: 12, color: 'var(--text-muted)' }}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-                  <span>{STATUS_ICONS[run.status] || '·'} {run.status}</span>
-                  <span>PID {run.pid}</span>
-                  <span>{run.profileName}</span>
-                  <span>{run.startedAt ? timeAgo(run.startedAt) : ''}</span>
-                  {run.exitCode != null && run.exitCode !== 0 && <span className="badge badge-high" style={{ fontSize: 11 }}>exit {run.exitCode}</span>}
-                </div>
-                {run.error && <div style={{ color: 'var(--red)', fontSize: 11 }}>{run.error}</div>}
-                {run.stdout && (
-                  <details style={{ marginTop: 4 }}>
-                    <summary style={{ cursor: 'pointer' }}>Output ({(run.stdout.length / 1024).toFixed(1)} KB)</summary>
-                    <div className="agent-output-preview" style={{ maxHeight: 200 }}>
-                      <AnsiPre text={run.stdout} />
-                    </div>
-                  </details>
-                )}
-              </div>
-            ))}
-
             {/* Collapsed: show tail */}
-            {expandedAgent?.key !== agent.key && agent.outputTail && (
+            {expandedKey !== agent.key && agent.outputTail && (
               <div className="agent-output-preview">
                 <AnsiPre text={agent.outputTail.split('\n').slice(-3).join('\n')} />
               </div>
             )}
 
             {/* Expanded: full output */}
-            {expandedAgent?.key === agent.key && fullOutput && (
+            {expandedKey === agent.key && fullOutput && (
               <div className="agent-output-full" ref={outputRef}>
                 {fullOutput.stderr && (
                   <div className="agent-stderr">
@@ -274,6 +234,53 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
                     output ({(fullOutput.stdout.length / 1024).toFixed(1)} KB)
                   </div>
                   <AnsiPre text={fullOutput.stdout || '(no output yet)'} />
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Past runs as separate rows */}
+        {historyRuns.map((run, i) => (
+          <div key={`hist-${i}`} className={`agent-item agent-${run.status}`} style={{ opacity: 0.7 }}>
+            <div
+              className="agent-item-header"
+              onClick={() => setExpandedHistoryIdx(expandedHistoryIdx === i ? null : i)}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="agent-item-left">
+                <span className="agent-status-icon">
+                  {STATUS_ICONS[run.status] || '·'}
+                </span>
+                <div>
+                  <div className="agent-item-name">{run.profileName || 'unknown'}</div>
+                  <div className="agent-item-meta">
+                    PID {run.pid} · {run.startedAt ? timeAgo(run.startedAt) : 'unknown'}
+                    {run.archivedAt && ` · archived ${timeAgo(run.archivedAt)}`}
+                  </div>
+                </div>
+              </div>
+              <div className="agent-item-right">
+                <span className={`badge agent-badge-${run.status}`}>{run.status}</span>
+                {run.exitCode != null && run.exitCode !== 0 && (
+                  <span className="badge badge-high">exit {run.exitCode}</span>
+                )}
+                <span className="badge" style={{ fontSize: 10, opacity: 0.6 }}>past run</span>
+                <span className="agent-expand">{expandedHistoryIdx === i ? '▼' : '▶'}</span>
+              </div>
+            </div>
+
+            {run.error && (
+              <div className="agent-error">❌ {run.error}</div>
+            )}
+
+            {expandedHistoryIdx === i && run.stdout && (
+              <div className="agent-output-full">
+                <div className="agent-stdout">
+                  <div className="agent-output-label">
+                    output ({(run.stdout.length / 1024).toFixed(1)} KB)
+                  </div>
+                  <AnsiPre text={run.stdout} />
                 </div>
               </div>
             )}

@@ -382,6 +382,7 @@ async function archiveAgentState(repo, prId) {
       const histRaw = await fs.readFile(historyPath, 'utf-8');
       history = JSON.parse(histRaw);
     } catch {}
+    current.archivedAt = new Date().toISOString();
     history.push(current);
     await fs.writeFile(historyPath, JSON.stringify(history, null, 2), 'utf-8');
   } catch {}
