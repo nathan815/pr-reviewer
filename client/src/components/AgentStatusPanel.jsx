@@ -232,9 +232,15 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
             )}
 
             {/* Expanded: full output */}
-            {expandedKey === agent.key && fullOutput && (
+            {expandedKey === agent.key && (
               <div className="agent-output-full" ref={outputRef}>
-                {fullOutput.stderr && (
+                {agent.command && (
+                  <details style={{ marginBottom: 8 }}>
+                    <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)' }}>Command</summary>
+                    <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 11, padding: 8, background: 'var(--bg-primary)', borderRadius: 4, marginTop: 4 }}>{agent.command}</pre>
+                  </details>
+                )}
+                {fullOutput?.stderr && (
                   <div className="agent-stderr">
                     <div className="agent-output-label">stderr</div>
                     <AnsiPre text={fullOutput.stderr} />
@@ -242,9 +248,9 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
                 )}
                 <div className="agent-stdout">
                   <div className="agent-output-label">
-                    output ({(fullOutput.stdout.length / 1024).toFixed(1)} KB)
+                    output ({((fullOutput?.stdout?.length || 0) / 1024).toFixed(1)} KB)
                   </div>
-                  <AnsiPre text={fullOutput.stdout || '(no output yet)'} />
+                  <AnsiPre text={fullOutput?.stdout || '(no output yet)'} />
                 </div>
               </div>
             )}
@@ -285,14 +291,23 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
               <div className="agent-error">❌ {run.error}</div>
             )}
 
-            {expandedHistoryIdx === i && run.stdout && (
+            {expandedHistoryIdx === i && (
               <div className="agent-output-full">
-                <div className="agent-stdout">
-                  <div className="agent-output-label">
-                    output ({(run.stdout.length / 1024).toFixed(1)} KB)
+                {run.command && (
+                  <details style={{ marginBottom: 8 }}>
+                    <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)' }}>Command</summary>
+                    <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 11, padding: 8, background: 'var(--bg-primary)', borderRadius: 4, marginTop: 4 }}>{run.command}</pre>
+                  </details>
+                )}
+                {run.stdout && (
+                  <div className="agent-stdout">
+                    <div className="agent-output-label">
+                      output ({(run.stdout.length / 1024).toFixed(1)} KB)
+                    </div>
+                    <AnsiPre text={run.stdout} />
                   </div>
-                  <AnsiPre text={run.stdout} />
-                </div>
+                )}
+                {!run.stdout && <div style={{ padding: 8, fontSize: 12, color: 'var(--text-muted)' }}>(no output captured)</div>}
               </div>
             )}
           </div>
