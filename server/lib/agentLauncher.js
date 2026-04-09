@@ -97,7 +97,10 @@ export async function launchReviewAgent(prUrl, { force = false } = {}) {
 
   const { program, args, profileName } = await buildCommand(prUrl);
 
-  const child = spawn(program, args, {
+  // Build a single shell command string with proper quoting
+  const shellCmd = [program, ...args.map(a => a.includes(' ') ? `"${a}"` : a)].join(' ');
+
+  const child = spawn(shellCmd, [], {
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: true,
     detached: false,
