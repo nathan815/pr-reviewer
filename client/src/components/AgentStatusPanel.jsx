@@ -28,6 +28,8 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
   const [fullOutput, setFullOutput] = useState(null);
   const [relaunching, setRelaunching] = useState(null);
   const [killing, setKilling] = useState(null);
+  const [relaunchPrompt, setRelaunchPrompt] = useState({});
+  const [showRelaunchFor, setShowRelaunchFor] = useState(null);
   const outputRef = useRef(null);
 
   // Poll agent status
@@ -77,9 +79,15 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
       const res = await fetch('/api/agent/launch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prUrl: agent.prUrl, force: true }),
+        body: JSON.stringify({
+          prUrl: agent.prUrl,
+          force: true,
+          extraPrompt: relaunchPrompt[agent.key] || undefined,
+        }),
       });
       if (res.ok) {
+        setShowRelaunchFor(null);
+        setRelaunchPrompt(p => { const n = {...p}; delete n[agent.key]; return n; });
         onRelaunched?.();
         fetch('/api/agent/status').then(r => r.json()).then(setAgents).catch(() => {});
       }
@@ -136,25 +144,57 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
             )}
 
             {/* Action buttons */}
-            <div style={{ padding: '6px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
-              {agent.status === 'running' && (
-                <button
-                  className="btn btn-reject btn-sm"
-                  disabled={killing === agent.key}
-                  onClick={(e) => { e.stopPropagation(); handleKill(agent); }}
-                >
-                  {killing === agent.key ? 'Killing...' : 'Kill'}
-                </button>
-              )}
-              {agent.status !== 'running' && (
-                <button
-                  className="btn btn-sm"
-                  style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
-                  disabled={relaunching === agent.key}
-                  onClick={(e) => { e.stopPropagation(); handleRelaunch(agent); }}
-                >
-                  {relaunching === agent.key ? 'Relaunching...' : 'Relaunch'}
-                </button>
+            <div style={{ padding: '6px 16px', borderTop: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {agent.status === 'running' && (
+                  <button
+                    className="btn btn-reject btn-sm"
+                    disabled={killing === agent.key}
+                    onClick={(e) => { e.stopPropagation(); handleKill(agent); }}
+                  >
+                    {killing === agent.key ? 'Killing...' : 'Kill'}
+                  </button>
+                )}
+                {agent.status === 'failed' && (
+                  <button
+                    className="btn btn-sm"
+                    style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (showRelaunchFor !== agent.key) {
+                        setRelaunchPrompt(p => ({
+                          ...p,
+                          [agent.key]: 'The last review run exited prematurely. Resume the review of this PR from where it left off.',
+                        }));
+                      }
+                      setShowRelaunchFor(showRelaunchFor === agent.key ? null : agent.key);
+                    }}
+                  >
+                    Relaunch
+                  </button>
+                )}
+              </div>
+              {showRelaunchFor === agent.key && (
+                <div style={{ marginTop: 8 }} onClick={e => e.stopPropagation()}>
+                  <textarea
+                    className="instructions-editor"
+                    style={{ minHeight: 50, marginBottom: 6 }}
+                    value={relaunchPrompt[agent.key] || ''}
+                    onChange={e => setRelaunchPrompt(p => ({ ...p, [agent.key]: e.target.value }))}
+                    placeholder="Additional instructions..."
+                    spellCheck={false}
+                  />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      className="btn btn-post btn-sm"
+                      disabled={relaunching === agent.key}
+                      onClick={() => handleRelaunch(agent)}
+                    >
+                      {relaunching === agent.key ? 'Launching...' : 'Launch'}
+                    </button>
+                    <button className="btn btn-sm" onClick={() => setShowRelaunchFor(null)}>Cancel</button>
+                  </div>
+                </div>
               )}
             </div>
 
