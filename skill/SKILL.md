@@ -77,12 +77,20 @@ git worktree add "$reviewDir\worktree" {sourceBranch}
 ```
 
 ### Step 6: Get the diff
-Use the ADO tools or git to get the changed files:
+Use the ADO API to get the **exact** list of changed files — this is authoritative and matches what ADO shows in the PR files tab:
+```
+Use ado-repo_get_pull_request_iterations and ado-repo_get_pull_request_iteration_changes tools to get the changed files from ADO.
+```
+
+Then compute the merge-base and diff only those files:
 ```powershell
 cd "$HOME\pr-reviews\{repo}\{prId}\worktree"
-git diff {targetBranch}...HEAD --name-only
-git diff {targetBranch}...HEAD
+$mergeBase = git merge-base {targetBranch} HEAD
+# Only diff files that ADO reports as changed
+git diff $mergeBase HEAD -- {file1} {file2} ...
 ```
+
+**IMPORTANT**: Do NOT use `git diff {targetBranch}...HEAD` as it can include unrelated files from complex branching. Always use the merge-base approach and only review files that the ADO API lists as changed in the PR.
 
 ### Step 7: Load extra instructions
 Check for user-provided extra instructions:

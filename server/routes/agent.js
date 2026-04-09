@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { launchReviewAgent, getAgentStatuses, getAgentOutput, killAgent, getConfig, setActiveProfile } from '../lib/agentLauncher.js';
+import { launchReviewAgent, getAgentStatuses, getAgentOutput, killAgent, getConfig, setActiveProfile, saveConfig } from '../lib/agentLauncher.js';
 
 export const agentRouter = Router();
 
@@ -55,6 +55,16 @@ agentRouter.patch('/config/profile', async (req, res) => {
     const { profile } = req.body;
     if (!profile) return res.status(400).json({ error: 'Must provide profile name' });
     const config = await setActiveProfile(profile);
+    res.json(config);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Save full config (profiles + activeProfile)
+agentRouter.put('/config', async (req, res) => {
+  try {
+    const config = await saveConfig(req.body);
     res.json(config);
   } catch (err) {
     res.status(400).json({ error: err.message });

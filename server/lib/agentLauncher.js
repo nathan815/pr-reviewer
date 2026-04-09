@@ -266,6 +266,15 @@ export async function setActiveProfile(profileName) {
   return config;
 }
 
+/** Save full config (profiles + activeProfile) */
+export async function saveConfig(newConfig) {
+  const config = await loadConfig();
+  if (newConfig.profiles) config.profiles = newConfig.profiles;
+  if (newConfig.activeProfile) config.activeProfile = newConfig.activeProfile;
+  await fs.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
+  return config;
+}
+
 // --- Lockfile helpers ---
 
 async function readLock(lockPath) {
