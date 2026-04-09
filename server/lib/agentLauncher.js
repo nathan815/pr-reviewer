@@ -376,16 +376,6 @@ export function getDiscussionStatus(repo, prId, feedbackId) {
   };
 }
 
-/** Get full output for a discussion agent */
-export function getDiscussionAgentOutput(repo, prId, feedbackId) {
-  const key = `${repo}/${prId}/${feedbackId}`;
-  const info = discussionAgents.get(key);
-  if (!info) return null;
-  const stdout = typeof info.stdout === 'function' ? info.stdout() : (info._stdout || '');
-  const stderr = typeof info.stderr === 'function' ? info.stderr() : (info._stderr || '');
-  return { key, status: info.status, pid: info.pid, stdout, stderr };
-}
-
 /** Get status of all tracked agents (includes last N chars of output) */
 export function getAgentStatuses() {
   const statuses = [];
@@ -459,34 +449,35 @@ export function getAgentStatuses() {
   return statuses;
 }
 
-/** Get full output for a specific agent */
-export async function getAgentOutput(repo, prId) {
-  const key = `${repo}/${prId}`;
-  const info = runningAgents.get(key);
-  if (info) {
+/** Get full output for any agent by key */
+export async function getAgentOutputByKey(key) {
+  // Helper to extract output from an agent info object
+  const extract = (info) => {
     const stdout = typeof info.stdout === 'function' ? info.stdout() : (info._stdout || '');
     const stderr = typeof info.stderr === 'function' ? info.stderr() : (info._stderr || '');
-    return {
-      key,
-      status: info.status,
-      pid: info.pid,
-      startedAt: info.startedAt,
-      completedAt: info.completedAt || null,
-      exitCode: info.exitCode ?? null,
-      error: info.error || null,
-      stdout,
-      stderr,
-    };
+    return { key, status: info.status, pid: info.pid, stdout, stderr };
+  };
+
+  // Check review agents
+  if (runningAgents.has(key)) return extract(runningAgents.get(key));
+
+  // Check discussion agents
+  if (discussionAgents.has(key)) return extract(discussionAgents.get(key));
+
+  // Check curation agent
+  if (key === 'curation' && curationAgent) return extract(curationAgent);
+
+  // Fall back to persisted state on disk (review agents only)
+  const parts = key.split('/');
+  if (parts.length === 2) {
+    const statePath = path.join(REVIEWS_ROOT, parts[0], parts[1], 'agent-state.json');
+    try {
+      const raw = await fs.readFile(statePath, 'utf-8');
+      return JSON.parse(raw);
+    } catch {}
   }
 
-  // Fall back to persisted state on disk
-  const statePath = path.join(REVIEWS_ROOT, repo, String(prId), 'agent-state.json');
-  try {
-    const raw = await fs.readFile(statePath, 'utf-8');
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 /** Get history of past agent runs for a PR */
@@ -852,9 +843,4 @@ export function getCurationStatus() {
   };
 }
 
-export function getCurationAgentOutput() {
-  if (!curationAgent) return null;
-  const stdout = typeof curationAgent.stdout === 'function' ? curationAgent.stdout() : (curationAgent._stdout || '');
-  const stderr = typeof curationAgent.stderr === 'function' ? curationAgent.stderr() : (curationAgent._stderr || '');
-  return { key: 'curation', status: curationAgent.status, pid: curationAgent.pid, stdout, stderr };
-}
+

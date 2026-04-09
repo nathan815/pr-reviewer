@@ -307,18 +307,21 @@ export async function getLearningExamples() {
 /** Get learning stats summary */
 export async function getLearningStats() {
   const examples = await getLearningExamples();
-  const accepted = examples.filter(e => e.decision === 'accepted');
+  const accepted = examples.filter(e => e.decision === 'accepted' || e.decision === 'noted');
   const rejected = examples.filter(e => e.decision === 'rejected');
 
   const byCat = {};
   for (const ex of examples) {
-    if (!byCat[ex.category]) byCat[ex.category] = { accepted: 0, rejected: 0 };
-    byCat[ex.category][ex.decision]++;
+    if (!byCat[ex.category]) byCat[ex.category] = { accepted: 0, noted: 0, rejected: 0 };
+    if (ex.decision === 'accepted' || ex.decision === 'noted') byCat[ex.category].accepted++;
+    if (ex.decision === 'noted') byCat[ex.category].noted++;
+    if (ex.decision === 'rejected') byCat[ex.category].rejected++;
   }
 
   return {
     total: examples.length,
     accepted: accepted.length,
+    noted: examples.filter(e => e.decision === 'noted').length,
     rejected: rejected.length,
     acceptRate: examples.length ? Math.round(accepted.length / examples.length * 100) : 0,
     byCategory: byCat,

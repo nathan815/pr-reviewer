@@ -83,7 +83,7 @@ export default function Learnings() {
           </div>
           <div className="stat-card">
             <div className="stat-value" style={{ color: 'var(--green)' }}>{stats.accepted}</div>
-            <div className="stat-label">Accepted</div>
+            <div className="stat-label">Accepted{stats.noted > 0 ? ` (${stats.noted} noted)` : ''}</div>
           </div>
           <div className="stat-card">
             <div className="stat-value" style={{ color: 'var(--red)' }}>{stats.rejected}</div>

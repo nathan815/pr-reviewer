@@ -87,14 +87,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
     if (!expandedKey) { setFullOutput(null); return; }
     const agent = agents.find(a => a.key === expandedKey);
     if (!agent) { setFullOutput(null); return; }
-    let outputUrl;
-    if (agent.agentType === 'curation') {
-      outputUrl = '/api/agent/output/curation';
-    } else if (agent.agentType === 'discussion') {
-      outputUrl = `/api/agent/output/${agent.repo}/${agent.prId}/${agent.feedbackId}`;
-    } else {
-      outputUrl = `/api/agent/output/${agent.repo}/${agent.prId}`;
-    }
+    const outputUrl = `/api/agent/output?key=${encodeURIComponent(agent.key)}`;
     const load = () =>
       fetch(outputUrl)
         .then(r => r.json())
