@@ -107,17 +107,18 @@ export default function ReviewDetail() {
   const isFailed = metadata.status === 'review_failed';
   const isRequested = metadata.status === 'review_requested';
   const items = feedback.items || [];
-  const filtered = activeFile
-    ? items.filter(i => i.file === activeFile)
-    : filter === 'all' ? items : items.filter(i => i.status === filter);
+  const filtered = items.filter(i => {
+    if (activeFile && i.file !== activeFile) return false;
+    if (filter !== 'all' && i.status !== filter) return false;
+    return true;
+  });
   const acceptedCount = items.filter(i => i.status === 'accepted').length;
 
   const handleFileClick = (filePath) => {
     if (activeFile === filePath) {
-      setActiveFile(null); // toggle off
+      setActiveFile(null);
     } else {
       setActiveFile(filePath);
-      setFilter('all');
     }
   };
 
