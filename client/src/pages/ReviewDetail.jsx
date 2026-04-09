@@ -206,7 +206,12 @@ export default function ReviewDetail() {
             {metadata.url && (
               <button
                 className="btn btn-rerun"
-                onClick={() => setShowRelaunchPrompt(!showRelaunchPrompt)}
+                onClick={() => {
+                  if (!showRelaunchPrompt && isFailed) {
+                    setRelaunchText('The last review run exited prematurely. Resume the review of this PR from where it left off.');
+                  }
+                  setShowRelaunchPrompt(!showRelaunchPrompt);
+                }}
               >
                 Re-run Review
               </button>

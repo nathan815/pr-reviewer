@@ -19,10 +19,30 @@ When a user asks to review a PR, or when a Teams message contains a PR review re
 ### Step 1: Parse the PR
 Extract the repo name and PR ID from the user's message or URL.
 
-### Step 2: Acquire lock
-Before starting the review, check for and write a lockfile to prevent concurrent reviews of the same PR:
+### Step 2: Check for existing progress
+Before starting fresh, check if a previous review run exists and what state it's in:
 ```powershell
 $reviewDir = "$HOME\pr-reviews\{repo}\{prId}"
+
+# Check what already exists
+$hasMetadata = Test-Path "$reviewDir\metadata.json"
+$hasFeedback = Test-Path "$reviewDir\feedback.json"
+$hasRisk = Test-Path "$reviewDir\risk-assessment.json"
+$hasOverview = Test-Path "$reviewDir\overview.md"
+$hasWorktree = Test-Path "$reviewDir\worktree\.git"
+$hasLock = Test-Path "$reviewDir\.review.lock"
+```
+
+If some files already exist from a prior run, **resume from where it left off** rather than redoing everything:
+- If worktree exists → skip Step 5
+- If feedback.json exists → skip the review (Step 9) unless user asked to re-review
+- If risk-assessment.json is missing but feedback exists → just write the missing files
+- If overview.md is missing → just write it
+- If a stale lockfile exists (process not alive), remove it and continue
+
+### Step 3: Acquire lock
+Before starting the review, check for and write a lockfile to prevent concurrent reviews of the same PR:
+```powershell
 $lockFile = "$reviewDir\.review.lock"
 
 # Check for existing lock
@@ -33,6 +53,8 @@ if (Test-Path $lockFile) {
     Write-Error "PR is already being reviewed by PID $($lock.pid)"
     exit 1
   }
+  # Stale lock — remove it
+  Remove-Item $lockFile -Force
 }
 
 # Write our lock
@@ -40,7 +62,7 @@ New-Item -ItemType Directory -Path $reviewDir -Force | Out-Null
 @{ pid = $PID; startedAt = (Get-Date -Format o) } | ConvertTo-Json | Set-Content $lockFile
 ```
 
-### Step 3: Write initial metadata
+### Step 4: Write initial metadata
 Write metadata.json **immediately** so the UI shows the PR while the review is in progress:
 ```powershell
 $reviewDir = "$HOME\pr-reviews\{repo}\{prId}"
@@ -58,7 +80,7 @@ $metadata = @{
 Set-Content "$reviewDir\metadata.json" $metadata
 ```
 
-### Step 4: Get PR details
+### Step 5: Get PR details
 Use the `ado-repo_get_pull_request_by_id` tool to fetch PR metadata:
 ```
 repo: {repoName}
@@ -67,7 +89,7 @@ project: {projectName}
 ```
 Update metadata.json with any additional details from the API response.
 
-### Step 5: Set up worktree
+### Step 6: Set up worktree
 Create a git worktree for the PR branch so the code can be reviewed:
 ```powershell
 $reviewDir = "$HOME\pr-reviews\{repo}\{prId}"
@@ -76,7 +98,7 @@ cd {repoRoot}
 git worktree add "$reviewDir\worktree" {sourceBranch}
 ```
 
-### Step 6: Get the diff
+### Step 7: Get the diff
 Use the ADO API to get the **exact** list of changed files — this is authoritative and matches what ADO shows in the PR files tab:
 ```
 Use ado-repo_get_pull_request_iterations and ado-repo_get_pull_request_iteration_changes tools to get the changed files from ADO.
@@ -92,7 +114,7 @@ git diff $mergeBase HEAD -- {file1} {file2} ...
 
 **IMPORTANT**: Do NOT use `git diff {targetBranch}...HEAD` as it can include unrelated files from complex branching. Always use the merge-base approach and only review files that the ADO API lists as changed in the PR.
 
-### Step 7: Load extra instructions
+### Step 8: Load extra instructions
 Check for user-provided extra instructions:
 ```powershell
 if (Test-Path "$HOME\pr-reviews\extra_instructions.md") {
@@ -101,7 +123,7 @@ if (Test-Path "$HOME\pr-reviews\extra_instructions.md") {
 ```
 If extra instructions exist, follow them — they provide important context like where repos are located, review preferences, and project-specific information.
 
-### Step 8: Load reviewer guidelines
+### Step 9: Load reviewer guidelines
 Before reviewing, check for curated guidelines that reflect the user's preferences:
 ```powershell
 # Global guidelines
@@ -115,7 +137,7 @@ if (Test-Path "$HOME\pr-reviews\.learnings\repo\{repo}\guidelines.md") {
 ```
 If guidelines exist, follow them closely — they represent the user's calibrated preferences for what to comment on, what to ignore, severity levels, and tone. Repo-specific guidelines take precedence over global ones for that repo.
 
-### Step 9: Review the code
+### Step 10: Review the code
 For each changed file, analyze the diff and generate feedback. Look for:
 - **Bugs**: Logic errors, null references, off-by-one errors, race conditions
 - **Security**: Injection vulnerabilities, auth issues, secrets exposure, input validation
@@ -124,7 +146,7 @@ For each changed file, analyze the diff and generate feedback. Look for:
 - **Testing**: Missing tests for new code, untested edge cases
 - **Documentation**: Missing or outdated comments for public APIs
 
-### Step 10: Write review files
+### Step 11: Write review files
 Write the following files to `~/pr-reviews/{repo}/{prId}/`:
 
 #### metadata.json
@@ -194,7 +216,7 @@ Write a human-readable summary covering:
 - Overall assessment and recommendation
 - Any questions for the author
 
-### Step 11: Release lock and confirm
+### Step 12: Release lock and confirm
 Remove the lockfile and update metadata status:
 ```powershell
 Remove-Item "$HOME\pr-reviews\{repo}\{prId}\.review.lock" -Force -ErrorAction SilentlyContinue
