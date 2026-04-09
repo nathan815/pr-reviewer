@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import { openSync, closeSync, readSync, statSync } from 'node:fs';
+import { createWriteStream, readSync, statSync, openSync, closeSync } from 'node:fs';
 import { spawn } from 'child_process';
 import path from 'path';
 import os from 'os';
@@ -142,20 +142,21 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
   await fs.mkdir(prDir, { recursive: true });
   const stdoutLogPath = path.join(prDir, 'agent-stdout.log');
   const stderrLogPath = path.join(prDir, 'agent-stderr.log');
-  const stdoutFd = openSync(stdoutLogPath, 'w');
-  const stderrFd = openSync(stderrLogPath, 'w');
+  const stdoutLog = createWriteStream(stdoutLogPath);
+  const stderrLog = createWriteStream(stderrLogPath);
 
-  // Spawn detached so the agent survives server restarts
+  // Spawn with pipes — agent survives server Ctrl+C on Windows (proven behavior)
   const child = spawn(shellCmd, [], {
-    stdio: ['ignore', stdoutFd, stderrFd],
+    stdio: ['ignore', 'pipe', 'pipe'],
     shell: true,
-    detached: true,
-    windowsHide: true,
     cwd: process.env.HOME || process.env.USERPROFILE,
   });
-  child.unref();
-  closeSync(stdoutFd);
-  closeSync(stderrFd);
+
+  // Tee output to both in-memory and log files
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', d => { stdout += d.toString(); stdoutLog.write(d); });
+  child.stderr.on('data', d => { stderr += d.toString(); stderrLog.write(d); });
 
   // Write lockfile with agent metadata and log file paths
   const lockData = {
@@ -179,12 +180,16 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
     command: shellCmd,
     startedAt: new Date().toISOString(),
     logFiles: { stdout: stdoutLogPath, stderr: stderrLogPath },
+    stdout: () => stdout,
+    stderr: () => stderr,
   };
 
   runningAgents.set(key, agentInfo);
   await persistAgentState(agentInfo);
 
-  child.on('exit', async (code) => {
+  child.on('close', async (code) => {
+    stdoutLog.end();
+    stderrLog.end();
     agentInfo.status = code === 0 ? 'completed' : 'failed';
     agentInfo.exitCode = code;
     agentInfo.completedAt = new Date().toISOString();
@@ -195,6 +200,8 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
   });
 
   child.on('error', async (err) => {
+    stdoutLog.end();
+    stderrLog.end();
     agentInfo.status = 'failed';
     agentInfo.error = err.message;
     agentInfo.completedAt = new Date().toISOString();
@@ -410,12 +417,15 @@ export function getAgentStatuses() {
   const statuses = [];
   for (const [key, info] of runningAgents) {
     let stdout, stderr;
-    if (info.logFiles) {
+    if (typeof info.stdout === 'function') {
+      stdout = info.stdout();
+      stderr = typeof info.stderr === 'function' ? info.stderr() : '';
+    } else if (info.logFiles) {
       stdout = readFileTailSync(info.logFiles.stdout);
       stderr = readFileTailSync(info.logFiles.stderr);
     } else {
-      stdout = typeof info.stdout === 'function' ? info.stdout() : (info._stdout || '');
-      stderr = typeof info.stderr === 'function' ? info.stderr() : (info._stderr || '');
+      stdout = info._stdout || '';
+      stderr = info._stderr || '';
     }
     statuses.push({
       key,
@@ -801,11 +811,26 @@ async function loadPersistedAgentStates() {
             const key = `${repo}/${prId}`;
 
             if (data.status === 'running') {
-              data.status = 'failed';
-              data.error = 'Server restarted while agent was running';
-              data.completedAt = new Date().toISOString();
+              // Check if the review actually completed despite the agent being killed
+              try {
+                const review = await getReview(repo, prId);
+                if (review.metadata?.status === 'agent_review_done') {
+                  data.status = 'completed';
+                  data.completedAt = new Date().toISOString();
+                  console.log(`[agent] ${key} review completed despite server restart`);
+                } else {
+                  data.status = 'failed';
+                  data.error = 'Server restarted while agent was running';
+                  data.completedAt = new Date().toISOString();
+                  await markMetadataFailed(repo, prId, 'Server restarted while agent was running');
+                }
+              } catch {
+                data.status = 'failed';
+                data.error = 'Server restarted while agent was running';
+                data.completedAt = new Date().toISOString();
+                await markMetadataFailed(repo, prId, 'Server restarted while agent was running');
+              }
               await fs.writeFile(statePath, JSON.stringify(data, null, 2), 'utf-8');
-              await markMetadataFailed(repo, prId, 'Server restarted while agent was running');
             }
 
             runningAgents.set(key, {
