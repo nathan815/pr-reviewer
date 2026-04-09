@@ -146,6 +146,14 @@ For each changed file, analyze the diff and generate feedback. Look for:
 - **Testing**: Missing tests for new code, untested edge cases
 - **Documentation**: Missing or outdated comments for public APIs
 
+**CRITICAL — Line number accuracy**: Before writing any feedback item, you MUST verify the exact line number using `grep -n` in the worktree:
+```powershell
+cd "$HOME\pr-reviews\{repo}\{prId}\worktree"
+# Search for the specific code you're commenting on to get the real line number
+grep -n "the code snippet or unique string" "{file}"
+```
+Do NOT guess or estimate line numbers from reading file content — LLMs frequently miscount lines in large files. Always use `grep -n` to find the actual line number for the code you're referencing. If the code spans multiple lines, use the first matched line as `startLine` and verify `endLine` similarly.
+
 ### Step 11: Write review files
 Write the following files to `~/pr-reviews/{repo}/{prId}/`:
 
@@ -235,6 +243,7 @@ Overall risk: {risk level}
 - Generate IDs using `f-` prefix plus 8 random alphanumeric characters
 - Always include file paths relative to repo root (no leading slash)
 - Line numbers must be from the NEW version of the file (right side of diff)
+- **Always verify line numbers with `grep -n`** before writing feedback — never rely on counting lines from file content
 - Be specific in comments — reference variable names, function names, etc.
 - Provide actionable suggestions, not just problem descriptions
 - Severity guide:
