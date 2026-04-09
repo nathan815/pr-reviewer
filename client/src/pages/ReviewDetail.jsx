@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import Markdown from 'react-markdown';
 import FeedbackCard from '../components/FeedbackCard';
 import RiskBadge from '../components/RiskBadge';
 
@@ -142,7 +143,7 @@ export default function ReviewDetail() {
       {overview && (
         <div className="overview-section">
           <h2>Overview</h2>
-          <div style={{ whiteSpace: 'pre-wrap', fontSize: 14 }}>{overview}</div>
+          <div className="markdown-body"><Markdown>{overview}</Markdown></div>
         </div>
       )}
 
