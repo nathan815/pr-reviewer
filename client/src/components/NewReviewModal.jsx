@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 
 export default function NewReviewModal({ open, onClose, onLaunched }) {
   const [prUrl, setPrUrl] = useState('');
+  const [extraPrompt, setExtraPrompt] = useState('');
   const [config, setConfig] = useState(null);
   const [launching, setLaunching] = useState(false);
   const [result, setResult] = useState(null);
@@ -13,6 +14,7 @@ export default function NewReviewModal({ open, onClose, onLaunched }) {
       setResult(null);
       setError(null);
       setPrUrl('');
+      setExtraPrompt('');
     }
   }, [open]);
 
@@ -25,7 +27,7 @@ export default function NewReviewModal({ open, onClose, onLaunched }) {
       const res = await fetch('/api/agent/launch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prUrl: prUrl.trim() }),
+        body: JSON.stringify({ prUrl: prUrl.trim(), extraPrompt: extraPrompt.trim() || undefined }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -96,6 +98,18 @@ export default function NewReviewModal({ open, onClose, onLaunched }) {
               )}
             </div>
           )}
+
+          <div style={{ marginTop: 16 }}>
+            <label className="form-label">Additional Instructions (optional)</label>
+            <textarea
+              className="instructions-editor"
+              style={{ minHeight: 60 }}
+              value={extraPrompt}
+              onChange={e => setExtraPrompt(e.target.value)}
+              placeholder="e.g. 'Focus on security issues' or 'Pay attention to error handling in the API layer'"
+              spellCheck={false}
+            />
+          </div>
 
           {error && (
             <div className="modal-error">❌ {error}</div>

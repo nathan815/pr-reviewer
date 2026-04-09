@@ -41,18 +41,25 @@ export function parsePrUrl(url) {
   return null;
 }
 
-/** Build the command + args from config, substituting {{prUrl}} */
-async function buildCommand(prUrl) {
+/** Build the command + args from config, substituting {{prUrl}} and appending extra prompt */
+async function buildCommand(prUrl, extraPrompt) {
   const config = await loadConfig();
   const profile = config.profiles?.[config.activeProfile] || config.reviewCommand;
 
   const program = profile.program;
-  const args = profile.args.map(a => a.replace(/\{\{prUrl\}\}/g, prUrl));
+  const args = profile.args.map(a => {
+    let val = a.replace(/\{\{prUrl\}\}/g, prUrl);
+    // Append extra prompt to the -p argument if provided
+    if (extraPrompt && a.includes('{{prUrl}}')) {
+      val += '\n\nAdditional instructions from user:\n' + extraPrompt;
+    }
+    return val;
+  });
   return { program, args, profileName: config.activeProfile || 'default' };
 }
 
 /** Launch a background agent to review a PR. Use force=true to relaunch. */
-export async function launchReviewAgent(prUrl, { force = false } = {}) {
+export async function launchReviewAgent(prUrl, { force = false, extraPrompt = '' } = {}) {
   const parsed = parsePrUrl(prUrl);
   if (!parsed) throw new Error('Could not parse PR URL. Expected ADO format.');
 
@@ -95,7 +102,7 @@ export async function launchReviewAgent(prUrl, { force = false } = {}) {
   const lockData = { pid: process.pid, startedAt: new Date().toISOString(), prUrl };
   await writeLock(lockPath, lockData);
 
-  const { program, args, profileName } = await buildCommand(prUrl);
+  const { program, args, profileName } = await buildCommand(prUrl, extraPrompt);
 
   // Build a single shell command string with proper quoting
   const shellCmd = [program, ...args.map(a => a.includes(' ') ? `"${a}"` : a)].join(' ');

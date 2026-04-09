@@ -16,6 +16,8 @@ export default function ReviewDetail() {
   const [posting, setPosting] = useState(false);
   const [postResult, setPostResult] = useState(null);
   const [relaunching, setRelaunching] = useState(false);
+  const [showRelaunchPrompt, setShowRelaunchPrompt] = useState(false);
+  const [relaunchText, setRelaunchText] = useState('');
   const [activeFile, setActiveFile] = useState(null);
   const [adoInfo, setAdoInfo] = useState(null);
   const feedbackRefs = useRef({});
@@ -123,8 +125,14 @@ export default function ReviewDetail() {
       await fetch('/api/agent/launch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prUrl: review.metadata.url, force: true }),
+        body: JSON.stringify({
+          prUrl: review.metadata.url,
+          force: true,
+          extraPrompt: relaunchText || undefined,
+        }),
       });
+      setShowRelaunchPrompt(false);
+      setRelaunchText('');
       setTimeout(loadReview, 2000);
     } finally {
       setRelaunching(false);
@@ -195,18 +203,35 @@ export default function ReviewDetail() {
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {(isFailed || isRequested) && metadata.url && (
+            {metadata.url && (
               <button
                 className="btn btn-rerun"
-                onClick={handleRelaunch}
-                disabled={relaunching}
+                onClick={() => setShowRelaunchPrompt(!showRelaunchPrompt)}
               >
-                {relaunching ? 'Launching…' : 'Re-run Review'}
+                Re-run Review
               </button>
             )}
             <RiskBadge level={risk.overallRisk} />
           </div>
         </div>
+        {showRelaunchPrompt && (
+          <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+            <textarea
+              className="instructions-editor"
+              style={{ minHeight: 60, marginBottom: 8 }}
+              value={relaunchText}
+              onChange={e => setRelaunchText(e.target.value)}
+              placeholder="Additional instructions (optional) — e.g. 'Only write remaining files, worktree and feedback already exist' or 'Focus on security issues'"
+              spellCheck={false}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-post" onClick={handleRelaunch} disabled={relaunching}>
+                {relaunching ? 'Launching…' : 'Launch'}
+              </button>
+              <button className="btn" onClick={() => { setShowRelaunchPrompt(false); setRelaunchText(''); }}>Cancel</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Agent Status for this PR */}
