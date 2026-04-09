@@ -375,14 +375,30 @@ async function archiveAgentState(repo, prId) {
   const statePath = agentStatePath(repo, prId);
   const historyPath = path.join(path.dirname(statePath), 'agent-history.json');
   try {
-    const raw = await fs.readFile(statePath, 'utf-8');
-    const current = JSON.parse(raw);
+    // Prefer in-memory state (matches what status API returns) over disk
+    const key = `${repo}/${prId}`;
+    const memInfo = runningAgents.get(key);
+    let current;
+    if (memInfo) {
+      const stdout = typeof memInfo.stdout === 'function' ? memInfo.stdout() : (memInfo._stdout || '');
+      const stderr = typeof memInfo.stderr === 'function' ? memInfo.stderr() : (memInfo._stderr || '');
+      current = {
+        key, repo, prId, prUrl: memInfo.prUrl, pid: memInfo.pid,
+        status: memInfo.status, profileName: memInfo.profileName,
+        startedAt: memInfo.startedAt, completedAt: memInfo.completedAt || null,
+        exitCode: memInfo.exitCode ?? null, error: memInfo.error || null,
+        stdout, stderr,
+      };
+    } else {
+      const raw = await fs.readFile(statePath, 'utf-8');
+      current = JSON.parse(raw);
+    }
+    current.archivedAt = new Date().toISOString();
     let history = [];
     try {
       const histRaw = await fs.readFile(historyPath, 'utf-8');
       history = JSON.parse(histRaw);
     } catch {}
-    current.archivedAt = new Date().toISOString();
     history.push(current);
     await fs.writeFile(historyPath, JSON.stringify(history, null, 2), 'utf-8');
   } catch {}
