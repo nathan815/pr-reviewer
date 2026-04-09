@@ -1,27 +1,46 @@
 import fetch from 'node-fetch';
+import { execSync } from 'child_process';
 
 /**
  * ADO REST API client for posting PR comments.
+ * Uses `az cli` to fetch a Bearer token (no PAT needed).
  * 
  * Requires environment variables:
- *   ADO_PAT        - Personal Access Token
  *   ADO_ORG        - Organization name (e.g., "msazure")
  *   ADO_PROJECT    - Project name (e.g., "One")
+ * 
+ * Requires `az login` to have been run beforehand.
  */
 
-function getConfig() {
-  const pat = process.env.ADO_PAT;
-  const org = process.env.ADO_ORG;
-  const project = process.env.ADO_PROJECT;
-  if (!pat || !org || !project) {
-    throw new Error('Missing ADO_PAT, ADO_ORG, or ADO_PROJECT environment variables');
-  }
-  return { pat, org, project };
+let cachedToken = null;
+let tokenExpiry = 0;
+
+async function getAccessToken() {
+  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
+
+  const result = execSync(
+    'az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query "{token:accessToken,expires:expiresOn}" -o json',
+    { encoding: 'utf-8' }
+  );
+  const parsed = JSON.parse(result);
+  cachedToken = parsed.token;
+  // Expire 2 minutes early to avoid edge cases
+  tokenExpiry = new Date(parsed.expires).getTime() - 120_000;
+  return cachedToken;
 }
 
-function authHeader(pat) {
-  const encoded = Buffer.from(`:${pat}`).toString('base64');
-  return `Basic ${encoded}`;
+function getConfig() {
+  const org = process.env.ADO_ORG;
+  const project = process.env.ADO_PROJECT;
+  if (!org || !project) {
+    throw new Error('Missing ADO_ORG or ADO_PROJECT environment variables');
+  }
+  return { org, project };
+}
+
+async function authHeader() {
+  const token = await getAccessToken();
+  return `Bearer ${token}`;
 }
 
 function apiBase(org, project) {
@@ -33,7 +52,7 @@ function apiBase(org, project) {
  * Creates an inline comment at the specified file and line range.
  */
 export async function postPRComment(repoName, prId, { file, startLine, endLine, comment, suggestion }) {
-  const { pat, org, project } = getConfig();
+  const { org, project } = getConfig();
   const base = apiBase(org, project);
   const url = `${base}/git/repositories/${repoName}/pullRequests/${prId}/threads?api-version=7.1`;
 
@@ -67,7 +86,7 @@ export async function postPRComment(repoName, prId, { file, startLine, endLine, 
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': authHeader(pat),
+      'Authorization': await authHeader(),
     },
     body: JSON.stringify(threadPayload),
   });
@@ -88,12 +107,12 @@ export async function postPRComment(repoName, prId, { file, startLine, endLine, 
  * Get PR details from ADO (used for metadata enrichment).
  */
 export async function getPRDetails(repoName, prId) {
-  const { pat, org, project } = getConfig();
+  const { org, project } = getConfig();
   const base = apiBase(org, project);
   const url = `${base}/git/repositories/${repoName}/pullRequests/${prId}?api-version=7.1`;
 
   const response = await fetch(url, {
-    headers: { 'Authorization': authHeader(pat) },
+    headers: { 'Authorization': await authHeader() },
   });
 
   if (!response.ok) {

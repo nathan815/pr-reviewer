@@ -36,12 +36,12 @@ Open http://localhost:5173 to see:
 ### 3. Post to ADO
 Click "Post to ADO" to post accepted comments as PR threads under your identity.
 
-Requires environment variables:
+Requires `az login` and environment variables:
 ```powershell
-$env:ADO_PAT = "your-personal-access-token"
 $env:ADO_ORG = "msazure"
 $env:ADO_PROJECT = "One"
 ```
+Token is fetched automatically via `az account get-access-token` and cached until expiry.
 
 ## File Structure
 
