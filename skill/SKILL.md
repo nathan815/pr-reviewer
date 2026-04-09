@@ -40,15 +40,34 @@ New-Item -ItemType Directory -Path $reviewDir -Force | Out-Null
 @{ pid = $PID; startedAt = (Get-Date -Format o) } | ConvertTo-Json | Set-Content $lockFile
 ```
 
-### Step 3: Get PR details
+### Step 3: Write initial metadata
+Write metadata.json **immediately** so the UI shows the PR while the review is in progress:
+```powershell
+$reviewDir = "$HOME\pr-reviews\{repo}\{prId}"
+$metadata = @{
+  prId = {prId}
+  repo = "{repo}"
+  title = "{PR title}"
+  author = "{PR author}"
+  sourceBranch = "{source branch}"
+  targetBranch = "{target branch}"
+  url = "{PR URL}"
+  reviewedAt = (Get-Date -Format o)
+  status = "review_requested"
+} | ConvertTo-Json
+Set-Content "$reviewDir\metadata.json" $metadata
+```
+
+### Step 4: Get PR details
 Use the `ado-repo_get_pull_request_by_id` tool to fetch PR metadata:
 ```
 repo: {repoName}
 pullRequestId: {prId}
 project: {projectName}
 ```
+Update metadata.json with any additional details from the API response.
 
-### Step 3: Set up worktree
+### Step 5: Set up worktree
 Create a git worktree for the PR branch so the code can be reviewed:
 ```powershell
 $reviewDir = "$HOME\pr-reviews\{repo}\{prId}"
@@ -57,7 +76,7 @@ cd {repoRoot}
 git worktree add "$reviewDir\worktree" {sourceBranch}
 ```
 
-### Step 4: Get the diff
+### Step 6: Get the diff
 Use the ADO tools or git to get the changed files:
 ```powershell
 cd "$HOME\pr-reviews\{repo}\{prId}\worktree"
@@ -65,7 +84,7 @@ git diff {targetBranch}...HEAD --name-only
 git diff {targetBranch}...HEAD
 ```
 
-### Step 5: Review the code
+### Step 7: Review the code
 For each changed file, analyze the diff and generate feedback. Look for:
 - **Bugs**: Logic errors, null references, off-by-one errors, race conditions
 - **Security**: Injection vulnerabilities, auth issues, secrets exposure, input validation
@@ -74,7 +93,7 @@ For each changed file, analyze the diff and generate feedback. Look for:
 - **Testing**: Missing tests for new code, untested edge cases
 - **Documentation**: Missing or outdated comments for public APIs
 
-### Step 6: Write review files
+### Step 8: Write review files
 Write the following files to `~/pr-reviews/{repo}/{prId}/`:
 
 #### metadata.json
@@ -135,7 +154,7 @@ Write a human-readable summary covering:
 - Overall assessment and recommendation
 - Any questions for the author
 
-### Step 7: Release lock and confirm
+### Step 9: Release lock and confirm
 Remove the lockfile and update metadata status:
 ```powershell
 Remove-Item "$HOME\pr-reviews\{repo}\{prId}\.review.lock" -Force -ErrorAction SilentlyContinue
@@ -150,6 +169,7 @@ Overall risk: {risk level}
 ```
 
 ## Important Notes
+- **Do NOT remove the worktree** after the review. The web UI needs it to display code snippets inline with feedback comments.
 - Generate IDs using `f-` prefix plus 8 random alphanumeric characters
 - Always include file paths relative to repo root (no leading slash)
 - Line numbers must be from the NEW version of the file (right side of diff)
