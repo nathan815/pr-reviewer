@@ -19,7 +19,28 @@ When a user asks to review a PR, or when a Teams message contains a PR review re
 ### Step 1: Parse the PR
 Extract the repo name and PR ID from the user's message or URL.
 
-### Step 2: Get PR details
+### Step 2: Acquire lock
+Before starting the review, check for and write a lockfile to prevent concurrent reviews of the same PR:
+```powershell
+$reviewDir = "$HOME\pr-reviews\{repo}\{prId}"
+$lockFile = "$reviewDir\.review.lock"
+
+# Check for existing lock
+if (Test-Path $lockFile) {
+  $lock = Get-Content $lockFile | ConvertFrom-Json
+  # Check if the locking process is still alive
+  if (Get-Process -Id $lock.pid -ErrorAction SilentlyContinue) {
+    Write-Error "PR is already being reviewed by PID $($lock.pid)"
+    exit 1
+  }
+}
+
+# Write our lock
+New-Item -ItemType Directory -Path $reviewDir -Force | Out-Null
+@{ pid = $PID; startedAt = (Get-Date -Format o) } | ConvertTo-Json | Set-Content $lockFile
+```
+
+### Step 3: Get PR details
 Use the `ado-repo_get_pull_request_by_id` tool to fetch PR metadata:
 ```
 repo: {repoName}
@@ -114,7 +135,13 @@ Write a human-readable summary covering:
 - Overall assessment and recommendation
 - Any questions for the author
 
-### Step 7: Confirm
+### Step 7: Release lock and confirm
+Remove the lockfile and update metadata status:
+```powershell
+Remove-Item "$HOME\pr-reviews\{repo}\{prId}\.review.lock" -Force -ErrorAction SilentlyContinue
+```
+Update `metadata.json` status from `review_requested` to `pending_review`.
+
 Tell the user the review is ready and provide a link:
 ```
 Review ready! Open http://localhost:3847/review/{repo}/{prId} to see feedback.

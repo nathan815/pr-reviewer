@@ -43,7 +43,7 @@ export default function Dashboard() {
           onClose={() => setShowModal(false)}
           onLaunched={() => { setTimeout(loadReviews, 1000); }}
         />
-        <AgentStatusPanel />
+        <AgentStatusPanel onRelaunched={loadReviews} />
       </div>
     );
   }
@@ -68,7 +68,7 @@ export default function Dashboard() {
         onLaunched={() => { setTimeout(loadReviews, 1000); }}
       />
 
-      <AgentStatusPanel />
+      <AgentStatusPanel onRelaunched={loadReviews} />
 
       <div className="stats-row">
         <div className="stat-box">

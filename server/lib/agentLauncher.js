@@ -1,11 +1,13 @@
 import fs from 'fs/promises';
 import { spawn } from 'child_process';
 import path from 'path';
+import os from 'os';
 import { fileURLToPath } from 'url';
 import { writeReview } from './fileStore.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
+const REVIEWS_ROOT = path.join(os.homedir(), 'pr-reviews');
 
 // Track running agent processes: key = `${repo}/${prId}`
 const runningAgents = new Map();
@@ -46,19 +48,28 @@ async function buildCommand(prUrl) {
   return { program, args, profileName: config.activeProfile || 'default' };
 }
 
-/** Launch a background agent to review a PR */
-export async function launchReviewAgent(prUrl) {
+/** Launch a background agent to review a PR. Use force=true to relaunch. */
+export async function launchReviewAgent(prUrl, { force = false } = {}) {
   const parsed = parsePrUrl(prUrl);
   if (!parsed) throw new Error('Could not parse PR URL. Expected ADO format.');
 
   const { repo, prId } = parsed;
   const key = `${repo}/${prId}`;
 
-  // Don't launch duplicates
+  // Check for in-memory running agent
   if (runningAgents.has(key)) {
     const existing = runningAgents.get(key);
-    if (existing.status === 'running') {
+    if (existing.status === 'running' && !force) {
       return { repo, prId, status: 'already_running', pid: existing.pid };
+    }
+  }
+
+  // Check for lockfile from another process
+  const lockPath = path.join(REVIEWS_ROOT, repo, String(prId), '.review.lock');
+  if (!force) {
+    const lockInfo = await readLock(lockPath);
+    if (lockInfo && isLockAlive(lockInfo)) {
+      return { repo, prId, status: 'locked', lockedBy: lockInfo.pid, lockedAt: lockInfo.startedAt };
     }
   }
 
@@ -77,6 +88,10 @@ export async function launchReviewAgent(prUrl) {
     },
   });
 
+  // Write lockfile
+  const lockData = { pid: process.pid, startedAt: new Date().toISOString(), prUrl };
+  await writeLock(lockPath, lockData);
+
   const { program, args, profileName } = await buildCommand(prUrl);
 
   const child = spawn(program, args, {
@@ -90,6 +105,10 @@ export async function launchReviewAgent(prUrl) {
   let stderr = '';
   child.stdout.on('data', d => { stdout += d.toString(); });
   child.stderr.on('data', d => { stderr += d.toString(); });
+
+  // Update lock with actual child PID
+  lockData.pid = child.pid;
+  await writeLock(lockPath, lockData).catch(() => {});
 
   const agentInfo = {
     pid: child.pid,
@@ -109,6 +128,7 @@ export async function launchReviewAgent(prUrl) {
     agentInfo.status = code === 0 ? 'completed' : 'failed';
     agentInfo.exitCode = code;
     agentInfo.completedAt = new Date().toISOString();
+    removeLock(lockPath).catch(() => {});
     console.log(`[agent] Review of ${key} ${agentInfo.status} (exit ${code})`);
   });
 
@@ -116,6 +136,7 @@ export async function launchReviewAgent(prUrl) {
     agentInfo.status = 'failed';
     agentInfo.error = err.message;
     agentInfo.completedAt = new Date().toISOString();
+    removeLock(lockPath).catch(() => {});
     console.error(`[agent] Failed to launch for ${key}: ${err.message}`);
   });
 
@@ -181,4 +202,31 @@ export async function setActiveProfile(profileName) {
   config.activeProfile = profileName;
   await fs.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
   return config;
+}
+
+// --- Lockfile helpers ---
+
+async function readLock(lockPath) {
+  try {
+    const raw = await fs.readFile(lockPath, 'utf-8');
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+async function writeLock(lockPath, data) {
+  const dir = path.dirname(lockPath);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(lockPath, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+async function removeLock(lockPath) {
+  await fs.unlink(lockPath).catch(() => {});
+}
+
+function isLockAlive(lockInfo) {
+  if (!lockInfo?.pid) return false;
+  try {
+    process.kill(lockInfo.pid, 0); // signal 0 = check if alive
+    return true;
+  } catch { return false; }
 }

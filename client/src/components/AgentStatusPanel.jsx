@@ -6,10 +6,11 @@ const STATUS_ICONS = {
   failed: '❌',
 };
 
-export default function AgentStatusPanel() {
+export default function AgentStatusPanel({ onRelaunched }) {
   const [agents, setAgents] = useState([]);
   const [expandedAgent, setExpandedAgent] = useState(null);
   const [fullOutput, setFullOutput] = useState(null);
+  const [relaunching, setRelaunching] = useState(null);
   const outputRef = useRef(null);
 
   // Poll agent status
@@ -49,6 +50,25 @@ export default function AgentStatusPanel() {
     }
   }, [agents]);
 
+  const handleRelaunch = async (agent) => {
+    setRelaunching(agent.key);
+    try {
+      const res = await fetch('/api/agent/launch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prUrl: agent.prUrl, force: true }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onRelaunched?.();
+        // Refresh statuses immediately
+        fetch('/api/agent/status').then(r => r.json()).then(setAgents).catch(() => {});
+      }
+    } finally {
+      setRelaunching(null);
+    }
+  };
+
   if (agents.length === 0) return null;
 
   return (
@@ -84,6 +104,20 @@ export default function AgentStatusPanel() {
 
             {agent.error && (
               <div className="agent-error">❌ {agent.error}</div>
+            )}
+
+            {/* Relaunch button for failed/completed agents */}
+            {agent.status !== 'running' && (
+              <div style={{ padding: '6px 16px 6px', borderTop: '1px solid var(--border)' }}>
+                <button
+                  className="btn btn-sm"
+                  style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
+                  disabled={relaunching === agent.key}
+                  onClick={(e) => { e.stopPropagation(); handleRelaunch(agent); }}
+                >
+                  {relaunching === agent.key ? '⏳ Relaunching...' : '🔄 Relaunch Review'}
+                </button>
+              </div>
             )}
 
             {/* Collapsed: show tail */}
