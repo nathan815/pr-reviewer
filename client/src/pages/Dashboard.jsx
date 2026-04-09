@@ -12,7 +12,7 @@ export default function Dashboard() {
   const loadReviews = useCallback(() => {
     fetch('/api/reviews')
       .then(r => r.json())
-      .then(data => { setReviews(data); setLoading(false); })
+      .then(data => { setReviews(data.sort((a, b) => new Date(b.reviewedAt || 0) - new Date(a.reviewedAt || 0))); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 
