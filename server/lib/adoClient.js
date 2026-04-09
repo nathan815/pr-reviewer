@@ -93,7 +93,9 @@ export async function postPRComment(repoName, prId, { file, startLine, endLine, 
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`ADO API error ${response.status}: ${errorText}`);
+    const err = new Error(parseAdoError(response.status, errorText));
+    err.statusCode = response.status;
+    throw err;
   }
 
   const result = await response.json();
@@ -117,8 +119,20 @@ export async function getPRDetails(repoName, prId) {
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`ADO API error ${response.status}: ${errorText}`);
+    const err = new Error(parseAdoError(response.status, errorText));
+    err.statusCode = response.status;
+    throw err;
   }
 
   return response.json();
+}
+
+/** Extract a readable message from ADO error responses */
+function parseAdoError(status, body) {
+  try {
+    const parsed = JSON.parse(body);
+    return parsed.message || `ADO API error ${status}`;
+  } catch {
+    return `ADO API error ${status}: ${body}`;
+  }
 }

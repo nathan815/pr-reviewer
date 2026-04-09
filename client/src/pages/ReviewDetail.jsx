@@ -36,6 +36,9 @@ export default function ReviewDetail() {
       body: JSON.stringify({ repo, prId: Number(prId), feedbackId }),
     });
     const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || `Post failed (${res.status})`);
+    }
     if (data.success) loadReview();
     return data;
   };
@@ -50,8 +53,14 @@ export default function ReviewDetail() {
         body: JSON.stringify({ repo, prId: Number(prId) }),
       });
       const data = await res.json();
-      setPostResult(data);
+      if (!res.ok) {
+        setPostResult({ success: false, error: data.error || `Request failed (${res.status})` });
+      } else {
+        setPostResult(data);
+      }
       loadReview();
+    } catch (err) {
+      setPostResult({ success: false, error: err.message });
     } finally {
       setPosting(false);
     }
@@ -149,9 +158,11 @@ export default function ReviewDetail() {
             borderColor: postResult.success ? 'var(--green)' : 'var(--red)',
             marginBottom: 16
           }}>
-            {postResult.success
-              ? `✅ Successfully posted ${postResult.posted} comment(s) to ADO`
-              : `⚠️ Posted ${postResult.posted}, failed ${postResult.failed}`
+            {postResult.error
+              ? `❌ ${postResult.error}`
+              : postResult.success
+                ? `✅ Successfully posted ${postResult.posted} comment(s) to ADO`
+                : `⚠️ Posted ${postResult.posted}, failed ${postResult.failed}: ${postResult.errors?.map(e => e.error).join('; ')}`
             }
           </div>
         )}

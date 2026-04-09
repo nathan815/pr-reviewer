@@ -28,7 +28,8 @@ adoRouter.post('/post-comment', async (req, res) => {
     await markFeedbackPosted(repo, prId, feedbackId, result.threadId);
     res.json({ success: true, threadId: result.threadId, url: result.url });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    const status = err.statusCode || 500;
+    res.status(status).json({ error: err.message });
   }
 });
 
@@ -74,6 +75,7 @@ adoRouter.post('/post-accepted', async (req, res) => {
       errors,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    const status = err.statusCode || 500;
+    res.status(status).json({ error: err.message });
   }
 });

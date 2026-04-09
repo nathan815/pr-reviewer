@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import RiskBadge from './RiskBadge';
 
 const CATEGORY_ICONS = {
@@ -11,11 +12,26 @@ const CATEGORY_ICONS = {
 };
 
 export default function FeedbackCard({ item, onAccept, onReject, onReset, onPost }) {
+  const [postingThis, setPostingThis] = useState(false);
+  const [error, setError] = useState(null);
+
   const icon = CATEGORY_ICONS[item.category] || '💬';
   const isActionable = item.status === 'pending';
   const isAccepted = item.status === 'accepted';
   const isPosted = item.status === 'posted';
   const isRejected = item.status === 'rejected';
+
+  const handlePost = async () => {
+    setPostingThis(true);
+    setError(null);
+    try {
+      await onPost();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPostingThis(false);
+    }
+  };
 
   return (
     <div className={`feedback-card severity-${item.severity}`}>
@@ -47,6 +63,20 @@ export default function FeedbackCard({ item, onAccept, onReject, onReset, onPost
         )}
       </div>
 
+      {error && (
+        <div style={{
+          margin: '0 16px 8px',
+          padding: '8px 12px',
+          background: 'rgba(248,81,73,0.1)',
+          border: '1px solid rgba(248,81,73,0.3)',
+          borderRadius: 6,
+          fontSize: 13,
+          color: 'var(--red)',
+        }}>
+          ❌ {error}
+        </div>
+      )}
+
       <div className="feedback-actions">
         {isActionable && (
           <>
@@ -56,7 +86,9 @@ export default function FeedbackCard({ item, onAccept, onReject, onReset, onPost
         )}
         {isAccepted && (
           <>
-            <button className="btn btn-post btn-sm" onClick={onPost}>📤 Post to ADO</button>
+            <button className="btn btn-post btn-sm" onClick={handlePost} disabled={postingThis}>
+              {postingThis ? '⏳ Posting...' : '📤 Post to ADO'}
+            </button>
             <button className="btn btn-sm" onClick={onReset}>↩ Reset</button>
           </>
         )}
