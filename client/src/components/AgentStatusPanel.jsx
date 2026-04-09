@@ -75,8 +75,10 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
         .then(r => r.json())
         .then(data => {
           setFullOutput(data);
-          if (outputRef.current) {
-            outputRef.current.scrollTop = outputRef.current.scrollHeight;
+          const el = outputRef.current;
+          if (el) {
+            const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+            if (nearBottom) el.scrollTop = el.scrollHeight;
           }
         })
         .catch(() => {});
