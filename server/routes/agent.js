@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { launchReviewAgent, getAgentStatuses, getAgentOutput, getConfig, setActiveProfile } from '../lib/agentLauncher.js';
+import { launchReviewAgent, getAgentStatuses, getAgentOutput, killAgent, getConfig, setActiveProfile } from '../lib/agentLauncher.js';
 
 export const agentRouter = Router();
 
@@ -12,6 +12,16 @@ agentRouter.post('/launch', async (req, res) => {
     const result = await launchReviewAgent(prUrl, { force: !!force });
     const statusCode = result.status === 'already_running' || result.status === 'locked' ? 409 : 201;
     res.status(statusCode).json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Kill a running agent
+agentRouter.post('/kill/:repo/:prId', async (req, res) => {
+  try {
+    const result = await killAgent(req.params.repo, req.params.prId);
+    res.json(result);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

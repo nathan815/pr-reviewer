@@ -10,6 +10,7 @@ export default function ReviewDetail() {
   const [filter, setFilter] = useState('all');
   const [posting, setPosting] = useState(false);
   const [postResult, setPostResult] = useState(null);
+  const [relaunching, setRelaunching] = useState(false);
 
   const loadReview = useCallback(() => {
     fetch(`/api/reviews/${repo}/${prId}`)
@@ -79,10 +80,27 @@ export default function ReviewDetail() {
     loadReview();
   };
 
+  const handleRelaunch = async () => {
+    if (!review?.metadata?.url) return;
+    setRelaunching(true);
+    try {
+      await fetch('/api/agent/launch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prUrl: review.metadata.url, force: true }),
+      });
+      setTimeout(loadReview, 2000);
+    } finally {
+      setRelaunching(false);
+    }
+  };
+
   if (loading) return <div className="loading">Loading review</div>;
   if (!review) return <div className="empty-state">Review not found</div>;
 
   const { metadata, feedback, risk, overview } = review;
+  const isFailed = metadata.status === 'review_failed';
+  const isRequested = metadata.status === 'review_requested';
   const items = feedback.items || [];
   const filtered = filter === 'all' ? items : items.filter(i => i.status === filter);
   const acceptedCount = items.filter(i => i.status === 'accepted').length;
@@ -105,7 +123,19 @@ export default function ReviewDetail() {
               </a>
             )}
           </div>
-          <RiskBadge level={risk.overallRisk} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {(isFailed || isRequested) && metadata.url && (
+              <button
+                className="btn-secondary"
+                onClick={handleRelaunch}
+                disabled={relaunching}
+                style={{ fontSize: 13, whiteSpace: 'nowrap' }}
+              >
+                {relaunching ? '⏳ Launching…' : '🔄 Re-run Review'}
+              </button>
+            )}
+            <RiskBadge level={risk.overallRisk} />
+          </div>
         </div>
       </div>
 

@@ -1,16 +1,33 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import AnsiToHtml from 'ansi-to-html';
 
 const STATUS_ICONS = {
   running: '🔄',
   completed: '✅',
   failed: '❌',
+  killed: '🛑',
 };
+
+const ansiConverter = new AnsiToHtml({
+  fg: '#e6edf3',
+  bg: '#0d1117',
+  colors: {
+    0: '#8b949e', 1: '#f85149', 2: '#3fb950', 3: '#d29922',
+    4: '#58a6ff', 5: '#bc8cff', 6: '#39d2c0', 7: '#e6edf3',
+  },
+});
+
+function AnsiPre({ text }) {
+  const html = useMemo(() => ansiConverter.toHtml(text || ''), [text]);
+  return <pre dangerouslySetInnerHTML={{ __html: html }} />;
+}
 
 export default function AgentStatusPanel({ onRelaunched }) {
   const [agents, setAgents] = useState([]);
   const [expandedAgent, setExpandedAgent] = useState(null);
   const [fullOutput, setFullOutput] = useState(null);
   const [relaunching, setRelaunching] = useState(null);
+  const [killing, setKilling] = useState(null);
   const outputRef = useRef(null);
 
   // Poll agent status
@@ -29,7 +46,6 @@ export default function AgentStatusPanel({ onRelaunched }) {
         .then(r => r.json())
         .then(data => {
           setFullOutput(data);
-          // Auto-scroll to bottom
           if (outputRef.current) {
             outputRef.current.scrollTop = outputRef.current.scrollHeight;
           }
@@ -58,14 +74,22 @@ export default function AgentStatusPanel({ onRelaunched }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prUrl: agent.prUrl, force: true }),
       });
-      const data = await res.json();
       if (res.ok) {
         onRelaunched?.();
-        // Refresh statuses immediately
         fetch('/api/agent/status').then(r => r.json()).then(setAgents).catch(() => {});
       }
     } finally {
       setRelaunching(null);
+    }
+  };
+
+  const handleKill = async (agent) => {
+    setKilling(agent.key);
+    try {
+      await fetch(`/api/agent/kill/${agent.repo}/${agent.prId}`, { method: 'POST' });
+      fetch('/api/agent/status').then(r => r.json()).then(setAgents).catch(() => {});
+    } finally {
+      setKilling(null);
     }
   };
 
@@ -106,24 +130,33 @@ export default function AgentStatusPanel({ onRelaunched }) {
               <div className="agent-error">❌ {agent.error}</div>
             )}
 
-            {/* Relaunch button for failed/completed agents */}
-            {agent.status !== 'running' && (
-              <div style={{ padding: '6px 16px 6px', borderTop: '1px solid var(--border)' }}>
+            {/* Action buttons */}
+            <div style={{ padding: '6px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
+              {agent.status === 'running' && (
+                <button
+                  className="btn btn-reject btn-sm"
+                  disabled={killing === agent.key}
+                  onClick={(e) => { e.stopPropagation(); handleKill(agent); }}
+                >
+                  {killing === agent.key ? '⏳ Killing...' : '🛑 Kill'}
+                </button>
+              )}
+              {agent.status !== 'running' && (
                 <button
                   className="btn btn-sm"
                   style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
                   disabled={relaunching === agent.key}
                   onClick={(e) => { e.stopPropagation(); handleRelaunch(agent); }}
                 >
-                  {relaunching === agent.key ? '⏳ Relaunching...' : '🔄 Relaunch Review'}
+                  {relaunching === agent.key ? '⏳ Relaunching...' : '🔄 Relaunch'}
                 </button>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Collapsed: show tail */}
             {expandedAgent?.key !== agent.key && agent.outputTail && (
               <div className="agent-output-preview">
-                {agent.outputTail.split('\n').slice(-3).join('\n')}
+                <AnsiPre text={agent.outputTail.split('\n').slice(-3).join('\n')} />
               </div>
             )}
 
@@ -133,14 +166,14 @@ export default function AgentStatusPanel({ onRelaunched }) {
                 {fullOutput.stderr && (
                   <div className="agent-stderr">
                     <div className="agent-output-label">stderr</div>
-                    <pre>{fullOutput.stderr}</pre>
+                    <AnsiPre text={fullOutput.stderr} />
                   </div>
                 )}
                 <div className="agent-stdout">
                   <div className="agent-output-label">
                     output ({(fullOutput.stdout.length / 1024).toFixed(1)} KB)
                   </div>
-                  <pre>{fullOutput.stdout || '(no output yet)'}</pre>
+                  <AnsiPre text={fullOutput.stdout || '(no output yet)'} />
                 </div>
               </div>
             )}

@@ -118,6 +118,7 @@ export async function launchReviewAgent(prUrl, { force = false } = {}) {
 
   const agentInfo = {
     pid: child.pid,
+    _child: child,
     status: 'running',
     repo,
     prId,
@@ -131,7 +132,17 @@ export async function launchReviewAgent(prUrl, { force = false } = {}) {
   runningAgents.set(key, agentInfo);
   await persistAgentState(agentInfo);
 
+  // Periodically persist state while running so output survives restarts
+  const persistInterval = setInterval(() => {
+    if (agentInfo.status === 'running') {
+      persistAgentState(agentInfo).catch(() => {});
+    } else {
+      clearInterval(persistInterval);
+    }
+  }, 5000);
+
   child.on('close', async (code) => {
+    clearInterval(persistInterval);
     agentInfo.status = code === 0 ? 'completed' : 'failed';
     agentInfo.exitCode = code;
     agentInfo.completedAt = new Date().toISOString();
@@ -142,6 +153,7 @@ export async function launchReviewAgent(prUrl, { force = false } = {}) {
   });
 
   child.on('error', async (err) => {
+    clearInterval(persistInterval);
     agentInfo.status = 'failed';
     agentInfo.error = err.message;
     agentInfo.completedAt = new Date().toISOString();
@@ -209,6 +221,33 @@ export async function getAgentOutput(repo, prId) {
   } catch {
     return null;
   }
+}
+
+/** Kill a running agent */
+export async function killAgent(repo, prId) {
+  const key = `${repo}/${prId}`;
+  const info = runningAgents.get(key);
+  if (!info) throw new Error('No agent found for this PR');
+  if (info.status !== 'running') throw new Error(`Agent is not running (status: ${info.status})`);
+
+  if (info._child) {
+    info._child.kill('SIGTERM');
+    // Give it a moment, then force kill
+    setTimeout(() => {
+      try { info._child.kill('SIGKILL'); } catch {}
+    }, 3000);
+  } else {
+    try { process.kill(info.pid, 'SIGTERM'); } catch {}
+  }
+
+  info.status = 'killed';
+  info.completedAt = new Date().toISOString();
+  info.error = 'Killed by user';
+  const lockPath = path.join(REVIEWS_ROOT, repo, String(prId), '.review.lock');
+  removeLock(lockPath).catch(() => {});
+  await persistAgentState(info);
+  await markMetadataFailed(repo, prId, 'Killed by user');
+  return { repo, prId, status: 'killed' };
 }
 
 /** Get config (profiles + active) for the UI settings */
@@ -318,10 +357,12 @@ async function loadPersistedAgentStates() {
           const key = `${repo}/${prId}`;
 
           // If it was 'running' but the server restarted, mark as failed
+          // but preserve any output captured so far
           if (data.status === 'running') {
             data.status = 'failed';
             data.error = 'Server restarted while agent was running';
             data.completedAt = new Date().toISOString();
+            // stdout/stderr already in data from last persist — keep them
             await fs.writeFile(statePath, JSON.stringify(data, null, 2), 'utf-8');
             await markMetadataFailed(repo, prId, 'Server restarted while agent was running');
           }
