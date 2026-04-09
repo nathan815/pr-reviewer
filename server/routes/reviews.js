@@ -64,15 +64,10 @@ reviewsRouter.get('/:repo/:prId/ado-info', async (req, res) => {
     const { repo, prId } = req.params;
     const pr = await getPRDetails(repo, prId);
 
-    const prStatus = pr.status === 3 ? 'completed'
-      : pr.status === 2 ? 'abandoned'
-      : pr.status === 1 ? 'active'
-      : 'unknown';
-
-    const mergeStatus = pr.mergeStatus === 3 ? 'succeeded'
-      : pr.mergeStatus === 2 ? 'conflicts'
-      : pr.mergeStatus === 1 ? 'queued'
-      : null;
+    const statusMap = { 1: 'active', 2: 'abandoned', 3: 'completed', active: 'active', abandoned: 'abandoned', completed: 'completed' };
+    const mergeMap = { 1: 'queued', 2: 'conflicts', 3: 'succeeded', queued: 'queued', conflicts: 'conflicts', succeeded: 'succeeded' };
+    const prStatus = statusMap[pr.status] || 'unknown';
+    const mergeStatus = mergeMap[pr.mergeStatus] || null;
 
     const info = {
       title: pr.title,

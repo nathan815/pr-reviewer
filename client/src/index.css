@@ -98,7 +98,7 @@ a:hover { text-decoration: underline; }
 
 /* PR status badges */
 .status-pr-active { background: rgba(63,185,80,0.15); color: var(--green); }
-.status-pr-completed { background: rgba(188,140,255,0.15); color: var(--purple); }
+.status-pr-completed { background: rgba(63,185,80,0.15); color: var(--green); }
 .status-pr-abandoned { background: rgba(139,148,158,0.15); color: var(--text-muted); }
 .status-pr-unknown { background: rgba(139,148,158,0.1); color: var(--text-muted); }
 
@@ -127,7 +127,7 @@ a:hover { text-decoration: underline; }
 .btn-post:hover { background: #4090e0; }
 .btn-post:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-sm { padding: 3px 10px; font-size: 12px; }
-.btn-rerun { border-color: var(--accent); color: var(--accent); }
+.btn-rerun { border-color: var(--accent); color: var(--accent); white-space: nowrap; }
 .btn-rerun:hover { background: rgba(88,166,255,0.15); }
 .btn-rerun:disabled { opacity: 0.5; cursor: not-allowed; }
 

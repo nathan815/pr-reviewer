@@ -211,7 +211,7 @@ export default function ReviewDetail() {
               )}
               {adoInfo && (
                 <span className={`badge status-pr-${adoInfo.prStatus}`} style={{ fontSize: 12 }}>
-                  {adoInfo.prStatus}{adoInfo.mergeStatus === 'conflicts' ? ' (conflicts)' : ''}
+                  PR: {adoInfo.prStatus}{adoInfo.mergeStatus === 'conflicts' ? ' (conflicts)' : ''}
                 </span>
               )}
               {metadata.status && (
@@ -235,21 +235,7 @@ export default function ReviewDetail() {
                 </span>
               )}
             </div>
-            {adoInfo?.reviewers?.length > 0 && (
-              <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-                {adoInfo.reviewers.map((r, i) => (
-                  <span key={i} className="badge" style={{
-                    background: r.vote === 10 ? 'rgba(63,185,80,0.15)' : r.vote === 5 ? 'rgba(63,185,80,0.1)' :
-                      r.vote === -10 ? 'rgba(248,81,73,0.15)' : r.vote === -5 ? 'rgba(210,153,34,0.15)' : 'rgba(139,148,158,0.1)',
-                    color: r.vote === 10 ? 'var(--green)' : r.vote === 5 ? 'var(--green)' :
-                      r.vote === -10 ? 'var(--red)' : r.vote === -5 ? 'var(--orange)' : 'var(--text-muted)',
-                    fontSize: 12,
-                  }}>
-                    {r.vote === 10 ? '✓' : r.vote === 5 ? '~' : r.vote === -10 ? '✗' : r.vote === -5 ? '⏳' : '·'} {r.name}
-                  </span>
-                ))}
-              </div>
-            )}
+
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {metadata.url && (
@@ -287,6 +273,25 @@ export default function ReviewDetail() {
           </div>
         )}
       </div>
+
+      {/* Reviewers */}
+      {adoInfo?.reviewers?.length > 0 && (
+        <div className="overview-section">
+          <h2>Reviewers</h2>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {[...adoInfo.reviewers].sort((a, b) => a.name.localeCompare(b.name)).map((r, i) => (
+              <span key={i} className="badge" style={{
+                background: r.vote === 10 ? 'rgba(63,185,80,0.15)' : r.vote === 5 ? 'rgba(63,185,80,0.1)' :
+                  r.vote === -10 ? 'rgba(248,81,73,0.15)' : r.vote === -5 ? 'rgba(210,153,34,0.15)' : 'rgba(139,148,158,0.1)',
+                color: r.vote === 10 ? 'var(--green)' : r.vote === 5 ? 'var(--green)' :
+                  r.vote === -10 ? 'var(--red)' : r.vote === -5 ? 'var(--orange)' : 'var(--text-muted)',
+              }}>
+                {r.vote === 10 ? '✓' : r.vote === 5 ? '~' : r.vote === -10 ? '✗' : r.vote === -5 ? '⏳' : '·'} {r.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Agent Status for this PR */}
       <AgentStatusPanel repo={repo} prId={prId} onRelaunched={loadReview} />
