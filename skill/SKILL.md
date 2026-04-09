@@ -1,6 +1,11 @@
+---
+name: pr-review
+description: Review Azure DevOps pull requests and generate structured feedback. Use when asked to review a PR, analyze a pull request, or when given an ADO PR URL.
+allowed-tools: shell
+---
+
 # PR Review Agent Skill
 
-## Description
 Review Azure DevOps pull requests and generate structured feedback files for the PR Review Agent web UI.
 
 ## Trigger

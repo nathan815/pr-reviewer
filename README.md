@@ -6,7 +6,8 @@ A local code review agent that reviews ADO pull requests and lets you curate fee
 
 ```powershell
 cd ~/pr-review-agent
-npm run dev
+npm run install-skill   # Install the /pr-review skill for Copilot CLI
+npm run dev             # Start the web UI
 # → Server: http://localhost:3847
 # → UI:     http://localhost:5173
 ```

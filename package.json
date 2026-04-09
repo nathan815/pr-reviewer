@@ -5,7 +5,8 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "cd server && node --watch index.js",
     "dev:client": "cd client && npx vite",
-    "build:client": "cd client && npx vite build --outDir ../server/public"
+    "build:client": "cd client && npx vite build --outDir ../server/public",
+    "install-skill": "pwsh -File install-skill.ps1"
   },
   "devDependencies": {
     "concurrently": "^9.0.0"
