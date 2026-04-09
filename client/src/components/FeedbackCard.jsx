@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import RiskBadge from './RiskBadge';
 import CodeSnippet from './CodeSnippet';
 
@@ -22,7 +22,6 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
   const [discussing, setDiscussing] = useState(false);
   const [discussionStatus, setDiscussionStatus] = useState(null);
   const [showEditHistory, setShowEditHistory] = useState(false);
-  const discussionEndRef = useRef(null);
 
   const icon = CATEGORY_ICONS[item.category] || '💬';
   const isActionable = item.status === 'pending';
@@ -65,12 +64,6 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
     return () => clearInterval(poll);
   }, [discussing, repo, prId, item.id]);
 
-  // Scroll to bottom of discussion when new messages arrive
-  useEffect(() => {
-    if (showDiscussion && discussionEndRef.current) {
-      discussionEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [discussion.length, showDiscussion]);
 
   const handleAsk = async () => {
     if (!discussionInput.trim()) return;
@@ -217,7 +210,6 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
               Agent is thinking...
             </div>
           )}
-          <div ref={discussionEndRef} />
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             <input
               type="text"
