@@ -190,7 +190,7 @@ export default function ReviewDetail() {
               {adoInfo?.author || metadata.author} → {metadata.targetBranch} &nbsp;|&nbsp; {repo} #{prId}
               {adoInfo?.isDraft && <span className="badge" style={{ marginLeft: 8, background: 'rgba(210,153,34,0.15)', color: 'var(--orange)' }}>Draft</span>}
             </div>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4 }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
               {metadata.url && (
                 <a href={metadata.url} target="_blank" rel="noopener" style={{ fontSize: 13 }}>
                   Open in ADO ↗
@@ -199,6 +199,19 @@ export default function ReviewDetail() {
               {adoInfo && (
                 <span className={`badge status-pr-${adoInfo.prStatus}`} style={{ fontSize: 12 }}>
                   {adoInfo.prStatus}{adoInfo.mergeStatus === 'conflicts' ? ' (conflicts)' : ''}
+                </span>
+              )}
+              {metadata.status && (
+                <span className={`badge ${
+                  metadata.status === 'review_failed' ? 'badge-high'
+                  : metadata.status === 'review_requested' ? 'status-pending'
+                  : metadata.status === 'pending_review' ? 'badge-low'
+                  : 'badge-unknown'
+                }`} style={{ fontSize: 12 }}>
+                  {metadata.status === 'pending_review' ? 'review complete'
+                   : metadata.status === 'review_requested' ? 'reviewing...'
+                   : metadata.status === 'review_failed' ? 'review failed'
+                   : metadata.status}
                 </span>
               )}
             </div>

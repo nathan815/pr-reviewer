@@ -229,7 +229,7 @@ Remove the lockfile and update metadata status:
 ```powershell
 Remove-Item "$HOME\pr-reviews\{repo}\{prId}\.review.lock" -Force -ErrorAction SilentlyContinue
 ```
-Update `metadata.json` status from `review_requested` to `pending_review`.
+Update `metadata.json` — set status to `pending_review` unconditionally (it may have been changed to `review_failed` by the server if it restarted mid-review, but since we completed successfully, override it back).
 
 Tell the user the review is ready and provide a link:
 ```
