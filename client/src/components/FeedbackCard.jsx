@@ -101,7 +101,7 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
                 onClick={() => setShowNote(!showNote)}
                 style={{ color: 'var(--text-muted)', fontSize: 11 }}
               >
-                {showNote ? '▼' : '▶'} Add note
+                {showNote ? '▼' : '▶'} Add feedback to agent
               </button>
               {showNote && (
                 <input
