@@ -236,7 +236,7 @@ ${discussionHistory || '(new discussion)'}
 ## Instructions
 1. Read the relevant source code file at the path shown above to understand the context. The worktree is at: ${path.join(REVIEWS_ROOT, repo, String(prId), 'worktree')}
 2. Answer the reviewer's question thoughtfully and concisely.
-3. If after discussion you believe the feedback item should be revised (title, comment, suggestion, severity, or category), include the updates.
+3. If after discussion you believe the feedback item should be revised (title, comment, suggestion, severity, or category), include the updates in updatedItem.
 4. Write your response as JSON to: ${responseFile}
 
 Response JSON format:
@@ -251,7 +251,11 @@ If the feedback should be revised, set updatedItem to an object with ONLY the ch
   "updatedItem": { "comment": "revised comment...", "severity": "low" }
 }
 
-IMPORTANT: Write ONLY valid JSON to the response file, nothing else.`;
+CRITICAL RULES:
+- ONLY write to the response file path above. Do NOT edit feedback.json, overview.md, metadata.json, or any other review files.
+- The server will read your response file and apply any edits to feedback.json on your behalf, tracking edit history.
+- If you edit feedback.json directly, edit history will be lost and the review state may become corrupted.
+- Write ONLY valid JSON to the response file, nothing else.`;
 
   const config = await loadConfig();
   const profile = config.profiles?.[config.activeProfile] || Object.values(config.profiles)[0];
@@ -269,11 +273,23 @@ IMPORTANT: Write ONLY valid JSON to the response file, nothing else.`;
 
   const shellCmd = [program, ...args.map(a => a.includes(' ') || a.includes('\n') ? `"${a.replace(/"/g, '\\"')}"` : a)].join(' ');
 
+  // Protect review files from direct edits by the agent
+  const reviewDir = path.join(REVIEWS_ROOT, repo, String(prId));
+  const protectedFiles = ['feedback.json', 'overview.md', 'metadata.json'].map(f => path.join(reviewDir, f));
+  for (const f of protectedFiles) {
+    try { await fs.chmod(f, 0o444); } catch {}
+  }
+  const unprotectFiles = async () => {
+    for (const f of protectedFiles) {
+      try { await fs.chmod(f, 0o644); } catch {}
+    }
+  };
+
   const child = spawn(shellCmd, [], {
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: true,
     detached: false,
-    cwd: path.join(REVIEWS_ROOT, repo, String(prId)),
+    cwd: reviewDir,
   });
 
   let stdout = '';
@@ -293,6 +309,7 @@ IMPORTANT: Write ONLY valid JSON to the response file, nothing else.`;
   discussionAgents.set(key, agentInfo);
 
   child.on('close', async (code) => {
+    await unprotectFiles();
     agentInfo.status = code === 0 ? 'completed' : 'failed';
     agentInfo.exitCode = code;
     agentInfo.completedAt = new Date().toISOString();
@@ -327,6 +344,7 @@ IMPORTANT: Write ONLY valid JSON to the response file, nothing else.`;
   });
 
   child.on('error', async (err) => {
+    await unprotectFiles();
     agentInfo.status = 'failed';
     agentInfo.error = err.message;
     agentInfo.completedAt = new Date().toISOString();
