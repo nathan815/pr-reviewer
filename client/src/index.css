@@ -110,6 +110,9 @@ a:hover { text-decoration: underline; }
 .btn-post:hover { background: #4090e0; }
 .btn-post:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-sm { padding: 3px 10px; font-size: 12px; }
+.btn-rerun { border-color: var(--accent); color: var(--accent); }
+.btn-rerun:hover { background: rgba(88,166,255,0.15); }
+.btn-rerun:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Feedback card */
 .feedback-card {

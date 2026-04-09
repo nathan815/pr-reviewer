@@ -126,12 +126,11 @@ export default function ReviewDetail() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {(isFailed || isRequested) && metadata.url && (
               <button
-                className="btn-secondary"
+                className="btn btn-rerun"
                 onClick={handleRelaunch}
                 disabled={relaunching}
-                style={{ fontSize: 13, whiteSpace: 'nowrap' }}
               >
-                {relaunching ? '⏳ Launching…' : '🔄 Re-run Review'}
+                {relaunching ? '⏳ Launching…' : '↻ Re-run Review'}
               </button>
             )}
             <RiskBadge level={risk.overallRisk} />
