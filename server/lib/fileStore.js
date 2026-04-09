@@ -8,6 +8,23 @@ const EXAMPLES_PATH = path.join(LEARNINGS_DIR, 'examples.jsonl');
 const GUIDELINES_PATH = path.join(LEARNINGS_DIR, 'guidelines.md');
 const EXTRA_INSTRUCTIONS_PATH = path.join(REVIEWS_ROOT, 'extra_instructions.md');
 
+// Simple per-file mutex to prevent concurrent read-modify-write races
+const fileLocks = new Map();
+async function withFileLock(filePath, fn) {
+  while (fileLocks.get(filePath)) {
+    await fileLocks.get(filePath);
+  }
+  let resolve;
+  const promise = new Promise(r => { resolve = r; });
+  fileLocks.set(filePath, promise);
+  try {
+    return await fn();
+  } finally {
+    fileLocks.delete(filePath);
+    resolve();
+  }
+}
+
 export async function ensureDir(dir) {
   await fs.mkdir(dir, { recursive: true });
 }
@@ -184,47 +201,48 @@ export async function readFileAtCommit(repo, prId, filePath, commitSha) {
 export async function addDiscussionMessage(repo, prId, feedbackId, role, message) {
   const dir = reviewDir(repo, prId);
   const feedbackPath = path.join(dir, 'feedback.json');
-  const feedback = await readJson(feedbackPath);
-
-  const item = feedback.items.find(i => i.id === feedbackId);
-  if (!item) throw new Error(`Feedback item ${feedbackId} not found`);
-
-  if (!item.discussion) item.discussion = [];
-  const entry = { role, message, timestamp: new Date().toISOString() };
-  item.discussion.push(entry);
-  await writeJson(feedbackPath, feedback);
-  return entry;
+  return withFileLock(feedbackPath, async () => {
+    const feedback = await readJson(feedbackPath);
+    const item = feedback.items.find(i => i.id === feedbackId);
+    if (!item) throw new Error(`Feedback item ${feedbackId} not found`);
+    if (!item.discussion) item.discussion = [];
+    const entry = { role, message, timestamp: new Date().toISOString() };
+    item.discussion.push(entry);
+    await writeJson(feedbackPath, feedback);
+    return entry;
+  });
 }
 
 /** Update a feedback item's content fields and record edit history */
 export async function updateFeedbackContent(repo, prId, feedbackId, updates) {
   const dir = reviewDir(repo, prId);
   const feedbackPath = path.join(dir, 'feedback.json');
-  const feedback = await readJson(feedbackPath);
+  return withFileLock(feedbackPath, async () => {
+    const feedback = await readJson(feedbackPath);
+    const item = feedback.items.find(i => i.id === feedbackId);
+    if (!item) throw new Error(`Feedback item ${feedbackId} not found`);
 
-  const item = feedback.items.find(i => i.id === feedbackId);
-  if (!item) throw new Error(`Feedback item ${feedbackId} not found`);
-
-  if (!item.editHistory) item.editHistory = [];
-  const snapshot = {};
-  const editableFields = ['title', 'comment', 'suggestion', 'severity', 'category'];
-  for (const field of editableFields) {
-    if (updates[field] !== undefined && updates[field] !== item[field]) {
-      snapshot[field] = item[field];
-      item[field] = updates[field];
+    if (!item.editHistory) item.editHistory = [];
+    const snapshot = {};
+    const editableFields = ['title', 'comment', 'suggestion', 'severity', 'category'];
+    for (const field of editableFields) {
+      if (updates[field] !== undefined && updates[field] !== item[field]) {
+        snapshot[field] = item[field];
+        item[field] = updates[field];
+      }
     }
-  }
 
-  if (Object.keys(snapshot).length > 0) {
-    item.editHistory.push({
-      previous: snapshot,
-      editedAt: new Date().toISOString(),
-      editedBy: 'discussion-agent',
-    });
-  }
+    if (Object.keys(snapshot).length > 0) {
+      item.editHistory.push({
+        previous: snapshot,
+        editedAt: new Date().toISOString(),
+        editedBy: 'discussion-agent',
+      });
+    }
 
-  await writeJson(feedbackPath, feedback);
-  return item;
+    await writeJson(feedbackPath, feedback);
+    return item;
+  });
 }
 
 // Helpers
