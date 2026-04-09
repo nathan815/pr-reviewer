@@ -87,9 +87,14 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
     if (!expandedKey) { setFullOutput(null); return; }
     const agent = agents.find(a => a.key === expandedKey);
     if (!agent) { setFullOutput(null); return; }
-    const outputUrl = agent.agentType === 'discussion'
-      ? `/api/agent/output/${agent.repo}/${agent.prId}/${agent.feedbackId}`
-      : `/api/agent/output/${agent.repo}/${agent.prId}`;
+    let outputUrl;
+    if (agent.agentType === 'curation') {
+      outputUrl = '/api/agent/output/curation';
+    } else if (agent.agentType === 'discussion') {
+      outputUrl = `/api/agent/output/${agent.repo}/${agent.prId}/${agent.feedbackId}`;
+    } else {
+      outputUrl = `/api/agent/output/${agent.repo}/${agent.prId}`;
+    }
     const load = () =>
       fetch(outputUrl)
         .then(r => r.json())
@@ -174,7 +179,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
                 </span>
                 <div>
                   <div className="agent-item-name">
-                    {agent.agentType === 'discussion' ? `Discussion · ${agent.feedbackId}` : agent.profileName}
+                    {agent.agentType === 'curation' ? 'Curation' : agent.agentType === 'discussion' ? `Discussion · ${agent.feedbackId}` : agent.profileName}
                   </div>
                   <div className="agent-item-meta">
                     PID {agent.pid} · {timeAgo(agent.startedAt)}

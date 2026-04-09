@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { launchReviewAgent, getAgentStatuses, getAgentOutput, getAgentHistory, killAgent, getConfig, setActiveProfile, saveConfig, getDiscussionAgentOutput } from '../lib/agentLauncher.js';
+import { launchReviewAgent, getAgentStatuses, getAgentOutput, getAgentHistory, killAgent, getConfig, setActiveProfile, saveConfig, getDiscussionAgentOutput, getCurationAgentOutput } from '../lib/agentLauncher.js';
 
 export const agentRouter = Router();
 
@@ -32,6 +32,13 @@ agentRouter.get('/status', (_req, res) => {
   res.json(getAgentStatuses());
 });
 
+// Get full output for the curation agent
+agentRouter.get('/output/curation', (_req, res) => {
+  const output = getCurationAgentOutput();
+  if (!output) return res.status(404).json({ error: 'No curation agent found' });
+  res.json(output);
+});
+
 // Get full output for a specific agent
 agentRouter.get('/output/:repo/:prId', async (req, res) => {
   const output = await getAgentOutput(req.params.repo, req.params.prId);
@@ -44,9 +51,10 @@ agentRouter.get('/output/:repo/:prId/:feedbackId', (req, res) => {
   const output = getDiscussionAgentOutput(req.params.repo, req.params.prId, req.params.feedbackId);
   if (!output) return res.status(404).json({ error: 'No discussion agent found' });
   res.json(output);
+
 });
 
-// Get history of past agent runs for a PR
+// Get historyof past agent runs for a PR
 agentRouter.get('/history/:repo/:prId', async (req, res) => {
   const history = await getAgentHistory(req.params.repo, req.params.prId);
   res.json(history);

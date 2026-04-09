@@ -434,6 +434,28 @@ export function getAgentStatuses() {
       feedbackId: info.feedbackId,
     });
   }
+  // Include curation agent
+  if (curationAgent) {
+    const stdout = typeof curationAgent.stdout === 'function' ? curationAgent.stdout() : (curationAgent._stdout || '');
+    const stderr = typeof curationAgent.stderr === 'function' ? curationAgent.stderr() : (curationAgent._stderr || '');
+    statuses.push({
+      key: 'curation',
+      repo: null,
+      prId: null,
+      pid: curationAgent.pid,
+      status: curationAgent.status,
+      profileName: 'curation',
+      command: curationAgent.command || null,
+      startedAt: curationAgent.startedAt,
+      completedAt: curationAgent.completedAt || null,
+      exitCode: curationAgent.exitCode ?? null,
+      error: curationAgent.error || null,
+      outputTail: stdout.slice(-500),
+      stderrTail: stderr.slice(-500),
+      outputLength: stdout.length,
+      agentType: 'curation',
+    });
+  }
   return statuses;
 }
 
@@ -775,8 +797,10 @@ export async function launchCurationAgent() {
     args.push('-p', prompt);
   }
 
-  const cmdStr = `${profile.program} ${args.map(a => a.includes(' ') || a.includes('\n') ? `"${a.replace(/"/g, '\\"')}"` : a).join(' ')}`;
-  const child = spawn(cmdStr, [], { shell: true, cwd: os.homedir() });
+  const displayCmd = `${profile.program} ${args.map(a => a === prompt ? '"<curation-prompt>"' : a).join(' ')}`;
+
+  // Use spawn with args array to avoid Windows command-line length limit
+  const child = spawn(profile.program, args, { shell: false, cwd: os.homedir() });
 
   let stdout = '';
   let stderr = '';
@@ -786,6 +810,7 @@ export async function launchCurationAgent() {
   curationAgent = {
     status: 'running',
     pid: child.pid,
+    command: displayCmd,
     startedAt: new Date().toISOString(),
     stdout: () => stdout,
     stderr: () => stderr,
@@ -825,4 +850,11 @@ export function getCurationStatus() {
     outputTail: out.slice(-2000),
     stderrTail: err.slice(-1000),
   };
+}
+
+export function getCurationAgentOutput() {
+  if (!curationAgent) return null;
+  const stdout = typeof curationAgent.stdout === 'function' ? curationAgent.stdout() : (curationAgent._stdout || '');
+  const stderr = typeof curationAgent.stderr === 'function' ? curationAgent.stderr() : (curationAgent._stderr || '');
+  return { key: 'curation', status: curationAgent.status, pid: curationAgent.pid, stdout, stderr };
 }
