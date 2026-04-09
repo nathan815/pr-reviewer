@@ -100,9 +100,20 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
       if (res.ok) {
         setShowRelaunchFor(null);
         setRelaunchPrompt(p => { const n = {...p}; delete n[agent.key]; return n; });
+        setExpandedKey(null);
+        setFullOutput(null);
+        // Clear current agents to avoid flash of stale state
+        setAgents([]);
         onRelaunched?.();
+        // Small delay to let server archive + start new agent
+        await new Promise(r => setTimeout(r, 500));
         reloadHistory();
-        fetch('/api/agent/status').then(r => r.json()).then(setAgents).catch(() => {});
+        fetch('/api/agent/status').then(r => r.json()).then(all => {
+          const filtered = (repo && prId)
+            ? all.filter(a => a.repo === repo && String(a.prId) === String(prId))
+            : all;
+          setAgents(filtered);
+        }).catch(() => {});
       }
     } finally {
       setRelaunching(null);
