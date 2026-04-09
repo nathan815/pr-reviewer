@@ -9,7 +9,7 @@ import {
   updateMetadata,
 } from '../lib/fileStore.js';
 import { getPRDetails } from '../lib/adoClient.js';
-import { launchCurationAgent, getCurationStatus } from '../lib/agentLauncher.js';
+import { launchCurationAgent, getCurationStatus, launchDiscussionAgent, getDiscussionStatus } from '../lib/agentLauncher.js';
 
 const AUTO_CURATE_THRESHOLD = 20; // auto-curate after this many new decisions
 
@@ -134,4 +134,24 @@ reviewsRouter.get('/:repo/:prId/file', async (req, res) => {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'File not found' });
     res.status(500).json({ error: err.message });
   }
+});
+
+// Start a discussion on a feedback item
+reviewsRouter.post('/:repo/:prId/feedback/:feedbackId/discuss', async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message?.trim()) return res.status(400).json({ error: 'Must provide message' });
+    const result = await launchDiscussionAgent(
+      req.params.repo, req.params.prId, req.params.feedbackId, message.trim()
+    );
+    res.status(result.status === 'already_running' ? 409 : 201).json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get discussion agent status for a feedback item
+reviewsRouter.get('/:repo/:prId/feedback/:feedbackId/discuss', async (req, res) => {
+  const status = getDiscussionStatus(req.params.repo, req.params.prId, req.params.feedbackId);
+  res.json(status || { status: 'idle' });
 });

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import RiskBadge from './RiskBadge';
 import CodeSnippet from './CodeSnippet';
 
@@ -12,11 +12,17 @@ const CATEGORY_ICONS = {
   documentation: '📝',
 };
 
-export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onReject, onReset, onPost }) {
+export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onReject, onReset, onPost, onItemUpdated }) {
   const [postingThis, setPostingThis] = useState(false);
   const [error, setError] = useState(null);
   const [noteText, setNoteText] = useState('');
   const [showNote, setShowNote] = useState(false);
+  const [showDiscussion, setShowDiscussion] = useState(false);
+  const [discussionInput, setDiscussionInput] = useState('');
+  const [discussing, setDiscussing] = useState(false);
+  const [discussionStatus, setDiscussionStatus] = useState(null);
+  const [showEditHistory, setShowEditHistory] = useState(false);
+  const discussionEndRef = useRef(null);
 
   const icon = CATEGORY_ICONS[item.category] || '💬';
   const isActionable = item.status === 'pending';
@@ -24,6 +30,53 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
   const isNoted = item.status === 'noted';
   const isPosted = item.status === 'posted';
   const isRejected = item.status === 'rejected';
+  const discussion = item.discussion || [];
+
+  // Poll discussion agent status when active
+  useEffect(() => {
+    if (!discussing) return;
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/reviews/${repo}/${prId}/feedback/${item.id}/discuss`);
+        const data = await res.json();
+        setDiscussionStatus(data);
+        if (data.status === 'completed' || data.status === 'failed') {
+          setDiscussing(false);
+          onItemUpdated?.(); // reload review to get updated discussion + potential edits
+        }
+      } catch {}
+    }, 2000);
+    return () => clearInterval(poll);
+  }, [discussing, repo, prId, item.id]);
+
+  // Scroll to bottom of discussion when new messages arrive
+  useEffect(() => {
+    if (showDiscussion && discussionEndRef.current) {
+      discussionEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [discussion.length, showDiscussion]);
+
+  const handleAsk = async () => {
+    if (!discussionInput.trim()) return;
+    setDiscussing(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/reviews/${repo}/${prId}/feedback/${item.id}/discuss`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: discussionInput.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to start discussion');
+      }
+      setDiscussionInput('');
+      onItemUpdated?.(); // reload to show user message immediately
+    } catch (err) {
+      setError(err.message);
+      setDiscussing(false);
+    }
+  };
 
   const handlePost = async () => {
     setPostingThis(true);
@@ -52,12 +105,34 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
           <span className="badge" style={{ textTransform: 'capitalize' }}>
             {item.category}
           </span>
+          {item.editHistory?.length > 0 && (
+            <span
+              className="badge badge-info"
+              style={{ cursor: 'pointer', fontSize: 10 }}
+              onClick={() => setShowEditHistory(!showEditHistory)}
+            >
+              edited {item.editHistory.length}x
+            </span>
+          )}
         </div>
         <span className={`badge status-${item.status}`}>
           {item.status}
           {isPosted && item.adoThreadId && ` #${item.adoThreadId}`}
         </span>
       </div>
+
+      {/* Edit history */}
+      {showEditHistory && item.editHistory?.map((edit, i) => (
+        <div key={i} style={{
+          margin: '0 16px 4px', padding: '6px 10px', fontSize: 11, color: 'var(--text-muted)',
+          background: 'rgba(88,166,255,0.05)', border: '1px solid rgba(88,166,255,0.15)', borderRadius: 4,
+        }}>
+          <div style={{ marginBottom: 2 }}>Edited by {edit.editedBy} · {new Date(edit.editedAt).toLocaleString()}</div>
+          {Object.entries(edit.previous).map(([field, val]) => (
+            <div key={field}><strong>{field}</strong> was: <em>{String(val).substring(0, 100)}{String(val).length > 100 ? '...' : ''}</em></div>
+          ))}
+        </div>
+      ))}
 
       <div className="feedback-body">
         {item.title && <strong style={{ display: 'block', marginBottom: 4 }}>{item.title}</strong>}
@@ -88,7 +163,64 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
           fontSize: 13,
           color: 'var(--red)',
         }}>
-          ❌ {error}
+          {error}
+        </div>
+      )}
+
+      {/* Discussion thread */}
+      <div style={{ padding: '0 16px 4px' }}>
+        <button
+          className="btn btn-sm"
+          onClick={() => setShowDiscussion(!showDiscussion)}
+          style={{ color: 'var(--text-muted)', fontSize: 11 }}
+        >
+          {showDiscussion ? '▼' : '▶'} Discuss{discussion.length > 0 ? ` (${discussion.length})` : ''}
+        </button>
+      </div>
+
+      {showDiscussion && (
+        <div style={{ margin: '0 16px 8px', borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+          {discussion.map((msg, i) => (
+            <div key={i} style={{
+              marginBottom: 8,
+              padding: '8px 10px',
+              borderRadius: 6,
+              fontSize: 13,
+              lineHeight: 1.5,
+              background: msg.role === 'user' ? 'rgba(88,166,255,0.08)' : 'rgba(63,185,80,0.08)',
+              borderLeft: `3px solid ${msg.role === 'user' ? 'var(--accent)' : 'var(--green)'}`,
+            }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                {msg.role === 'user' ? 'You' : 'Agent'} · {new Date(msg.timestamp).toLocaleTimeString()}
+              </div>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{msg.message}</div>
+            </div>
+          ))}
+          {discussing && (
+            <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)' }}>
+              Agent is thinking...
+            </div>
+          )}
+          <div ref={discussionEndRef} />
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <input
+              type="text"
+              className="feedback-note-input"
+              style={{ flex: 1 }}
+              placeholder="Ask about this feedback..."
+              value={discussionInput}
+              onChange={e => setDiscussionInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !discussing) handleAsk(); }}
+              disabled={discussing}
+            />
+            <button
+              className="btn btn-sm btn-post"
+              onClick={handleAsk}
+              disabled={discussing || !discussionInput.trim()}
+            >
+              Ask
+            </button>
+          </div>
         </div>
       )}
 

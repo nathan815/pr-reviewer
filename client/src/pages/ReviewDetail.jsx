@@ -343,6 +343,7 @@ export default function ReviewDetail() {
               onReject={(note) => updateStatus(item.id, 'rejected', note)}
               onReset={() => updateStatus(item.id, 'pending')}
               onPost={() => postSingle(item.id)}
+              onItemUpdated={loadReview}
             />
           ))
         )}

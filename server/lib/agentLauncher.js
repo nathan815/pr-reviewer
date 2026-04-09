@@ -3,7 +3,7 @@ import { spawn } from 'child_process';
 import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
-import { writeReview, getReview } from './fileStore.js';
+import { writeReview, getReview, addDiscussionMessage, updateFeedbackContent } from './fileStore.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
@@ -11,6 +11,9 @@ const REVIEWS_ROOT = path.join(os.homedir(), 'pr-reviews');
 
 // Track running agent processes: key = `${repo}/${prId}`
 const runningAgents = new Map();
+
+// Track discussion agents: key = `${repo}/${prId}/${feedbackId}`
+const discussionAgents = new Map();
 
 // Load persisted agent states on module init
 await loadPersistedAgentStates();
@@ -177,6 +180,180 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
 
   console.log(`[agent] Launched ${profileName} for ${key} (PID ${child.pid})`);
   return { repo, prId, status: 'launched', pid: child.pid, profileName };
+}
+
+// --- Discussion agents ---
+
+/** Launch a lightweight discussion agent for a single feedback item */
+export async function launchDiscussionAgent(repo, prId, feedbackId, userMessage) {
+  const key = `${repo}/${prId}/${feedbackId}`;
+
+  // Don't allow concurrent discussions on the same item
+  const existing = discussionAgents.get(key);
+  if (existing?.status === 'running') {
+    return { status: 'already_running', key };
+  }
+
+  // Load context
+  const review = await getReview(repo, prId);
+  const item = review.feedback.items?.find(i => i.id === feedbackId);
+  if (!item) throw new Error(`Feedback item ${feedbackId} not found`);
+
+  // Record user message
+  await addDiscussionMessage(repo, prId, feedbackId, 'user', userMessage);
+
+  // Build response file path
+  const responseFile = path.join(REVIEWS_ROOT, repo, String(prId), `discussion-${feedbackId}.json`);
+
+  // Build context for the agent
+  const otherItems = review.feedback.items
+    .filter(i => i.id !== feedbackId)
+    .map(i => `- [${i.severity}/${i.category}] ${i.file}:${i.startLine}: ${i.title}`)
+    .join('\n');
+
+  const discussionHistory = (item.discussion || [])
+    .map(d => `${d.role}: ${d.message}`)
+    .join('\n\n');
+
+  const prompt = `You are a code review discussion assistant. A reviewer has a question about a specific piece of feedback on a pull request.
+
+## Feedback Item Under Discussion
+Title: ${item.title}
+File: ${item.file} (lines ${item.startLine}-${item.endLine || item.startLine})
+Category: ${item.category} | Severity: ${item.severity}
+Comment: ${item.comment}
+Suggestion: ${item.suggestion || '(none)'}
+
+## PR Overview
+${review.overview || '(no overview available)'}
+
+## Other Feedback Items (for context)
+${otherItems || '(none)'}
+
+## Discussion So Far
+${discussionHistory || '(new discussion)'}
+
+## Instructions
+1. Read the relevant source code file at the path shown above to understand the context. The worktree is at: ${path.join(REVIEWS_ROOT, repo, String(prId), 'worktree')}
+2. Answer the reviewer's question thoughtfully and concisely.
+3. If after discussion you believe the feedback item should be revised (title, comment, suggestion, severity, or category), include the updates.
+4. Write your response as JSON to: ${responseFile}
+
+Response JSON format:
+{
+  "response": "Your answer to the reviewer...",
+  "updatedItem": null
+}
+
+If the feedback should be revised, set updatedItem to an object with ONLY the changed fields:
+{
+  "response": "Your answer...",
+  "updatedItem": { "comment": "revised comment...", "severity": "low" }
+}
+
+IMPORTANT: Write ONLY valid JSON to the response file, nothing else.`;
+
+  const config = await loadConfig();
+  const profile = config.profiles?.[config.activeProfile] || Object.values(config.profiles)[0];
+  const program = profile.program;
+
+  // Build args: same model but with discussion prompt instead of review skill
+  const baseArgs = [];
+  for (const a of profile.args) {
+    if (a === '-p' || a.includes('{{prUrl}}')) continue;
+    baseArgs.push(a);
+  }
+  // Remove --yolo if present, add it back (it might be in different positions)
+  const args = baseArgs.filter(a => a !== '--yolo');
+  args.push('--yolo', '-p', prompt);
+
+  const shellCmd = [program, ...args.map(a => a.includes(' ') || a.includes('\n') ? `"${a.replace(/"/g, '\\"')}"` : a)].join(' ');
+
+  const child = spawn(shellCmd, [], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: true,
+    detached: false,
+    cwd: path.join(REVIEWS_ROOT, repo, String(prId)),
+  });
+
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', d => { stdout += d.toString(); });
+  child.stderr.on('data', d => { stderr += d.toString(); });
+
+  const agentInfo = {
+    key, repo, prId, feedbackId,
+    pid: child.pid,
+    status: 'running',
+    command: shellCmd,
+    startedAt: new Date().toISOString(),
+    stdout: () => stdout,
+    stderr: () => stderr,
+  };
+  discussionAgents.set(key, agentInfo);
+
+  child.on('close', async (code) => {
+    agentInfo.status = code === 0 ? 'completed' : 'failed';
+    agentInfo.exitCode = code;
+    agentInfo.completedAt = new Date().toISOString();
+
+    // Try to read the response file
+    try {
+      const raw = await fs.readFile(responseFile, 'utf-8');
+      const parsed = JSON.parse(raw);
+      agentInfo.response = parsed.response;
+
+      // Record agent response in discussion thread
+      if (parsed.response) {
+        await addDiscussionMessage(repo, prId, feedbackId, 'agent', parsed.response);
+      }
+
+      // Apply edits if the agent suggested them
+      if (parsed.updatedItem && typeof parsed.updatedItem === 'object') {
+        await updateFeedbackContent(repo, prId, feedbackId, parsed.updatedItem);
+        agentInfo.updatedFields = Object.keys(parsed.updatedItem);
+      }
+
+      // Clean up response file
+      await fs.unlink(responseFile).catch(() => {});
+    } catch (err) {
+      // Agent didn't write a valid response file — record error as discussion message
+      const fallback = `Discussion agent finished but did not produce a structured response (exit code ${code}).`;
+      await addDiscussionMessage(repo, prId, feedbackId, 'agent', fallback);
+      agentInfo.response = fallback;
+    }
+
+    console.log(`[discussion] ${key} ${agentInfo.status} (exit ${code})`);
+  });
+
+  child.on('error', async (err) => {
+    agentInfo.status = 'failed';
+    agentInfo.error = err.message;
+    agentInfo.completedAt = new Date().toISOString();
+    await addDiscussionMessage(repo, prId, feedbackId, 'agent', `Discussion agent failed: ${err.message}`);
+    console.error(`[discussion] Failed for ${key}: ${err.message}`);
+  });
+
+  console.log(`[discussion] Launched for ${key} (PID ${child.pid})`);
+  return { status: 'launched', key, pid: child.pid };
+}
+
+/** Get discussion agent status */
+export function getDiscussionStatus(repo, prId, feedbackId) {
+  const key = `${repo}/${prId}/${feedbackId}`;
+  const info = discussionAgents.get(key);
+  if (!info) return null;
+  return {
+    key: info.key,
+    status: info.status,
+    pid: info.pid,
+    startedAt: info.startedAt,
+    completedAt: info.completedAt || null,
+    exitCode: info.exitCode ?? null,
+    error: info.error || null,
+    response: info.response || null,
+    updatedFields: info.updatedFields || null,
+  };
 }
 
 /** Get status of all tracked agents (includes last N chars of output) */

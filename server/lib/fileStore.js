@@ -180,6 +180,53 @@ export async function readFileAtCommit(repo, prId, filePath, commitSha) {
   return fs.readFile(path.join(worktreePath, filePath), 'utf-8');
 }
 
+/** Add a discussion message to a feedback item */
+export async function addDiscussionMessage(repo, prId, feedbackId, role, message) {
+  const dir = reviewDir(repo, prId);
+  const feedbackPath = path.join(dir, 'feedback.json');
+  const feedback = await readJson(feedbackPath);
+
+  const item = feedback.items.find(i => i.id === feedbackId);
+  if (!item) throw new Error(`Feedback item ${feedbackId} not found`);
+
+  if (!item.discussion) item.discussion = [];
+  const entry = { role, message, timestamp: new Date().toISOString() };
+  item.discussion.push(entry);
+  await writeJson(feedbackPath, feedback);
+  return entry;
+}
+
+/** Update a feedback item's content fields and record edit history */
+export async function updateFeedbackContent(repo, prId, feedbackId, updates) {
+  const dir = reviewDir(repo, prId);
+  const feedbackPath = path.join(dir, 'feedback.json');
+  const feedback = await readJson(feedbackPath);
+
+  const item = feedback.items.find(i => i.id === feedbackId);
+  if (!item) throw new Error(`Feedback item ${feedbackId} not found`);
+
+  if (!item.editHistory) item.editHistory = [];
+  const snapshot = {};
+  const editableFields = ['title', 'comment', 'suggestion', 'severity', 'category'];
+  for (const field of editableFields) {
+    if (updates[field] !== undefined && updates[field] !== item[field]) {
+      snapshot[field] = item[field];
+      item[field] = updates[field];
+    }
+  }
+
+  if (Object.keys(snapshot).length > 0) {
+    item.editHistory.push({
+      previous: snapshot,
+      editedAt: new Date().toISOString(),
+      editedBy: 'discussion-agent',
+    });
+  }
+
+  await writeJson(feedbackPath, feedback);
+  return item;
+}
+
 // Helpers
 async function readJson(filePath) {
   const content = await fs.readFile(filePath, 'utf-8');
