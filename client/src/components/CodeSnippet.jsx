@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 
 const CONTEXT_LINES = 5;
 
-export default function CodeSnippet({ repo, prId, file, startLine, endLine, comment }) {
+export default function CodeSnippet({ repo, prId, file, startLine, endLine, commitSha, comment }) {
   const [fileContent, setFileContent] = useState(null);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -11,7 +11,9 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
   const fetchFile = () => {
     if (fileContent !== null) return;
     setLoading(true);
-    fetch(`/api/reviews/${repo}/${prId}/file?path=${encodeURIComponent(file)}`)
+    const params = new URLSearchParams({ path: file });
+    if (commitSha) params.set('commit', commitSha);
+    fetch(`/api/reviews/${repo}/${prId}/file?${params}`)
       .then(r => {
         if (!r.ok) throw new Error(r.status === 404 ? 'File not in worktree' : `HTTP ${r.status}`);
         return r.text();
@@ -45,7 +47,10 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
   return (
     <div className="code-snippet">
       <div className="code-snippet-header">
-        <span className="code-snippet-filename">{file}</span>
+        <span className="code-snippet-filename">
+          {file}
+          {commitSha && <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>@ {commitSha.slice(0, 7)}</span>}
+        </span>
         <button className="btn btn-sm" onClick={() => setExpanded(!expanded)}>
           {expanded ? '↕ Collapse' : '↕ Full file'}
         </button>

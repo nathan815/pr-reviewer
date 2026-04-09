@@ -73,6 +73,7 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onReject, onR
           file={item.file}
           startLine={item.startLine}
           endLine={item.endLine}
+          commitSha={item.commitSha}
         />
       )}
 
@@ -122,15 +123,17 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onReject, onR
           <div className="feedback-user-note">📝 {item.userNote}</div>
         )}
         {isAccepted && (
-          <>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button className="btn btn-post btn-sm" onClick={handlePost} disabled={postingThis}>
               {postingThis ? '⏳ Posting...' : '📤 Post to ADO'}
             </button>
             <button className="btn btn-sm" onClick={onReset}>↩ Reset</button>
-          </>
+          </div>
         )}
         {isRejected && (
-          <button className="btn btn-sm" onClick={onReset}>↩ Reconsider</button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button className="btn btn-sm" onClick={onReset}>↩ Reconsider</button>
+          </div>
         )}
         {isPosted && (
           <span style={{ fontSize: 12, color: 'var(--text-muted)', padding: '3px 10px' }}>

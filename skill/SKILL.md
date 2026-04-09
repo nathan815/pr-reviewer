@@ -120,13 +120,21 @@ Write the following files to `~/pr-reviews/{repo}/{prId}/`:
   "sourceBranch": "{source branch}",
   "targetBranch": "{target branch}",
   "url": "{PR URL}",
+  "commitSha": "{HEAD commit SHA of the source branch at review time}",
+  "changedFiles": ["src/file1.cs", "src/file2.cs"],
   "reviewedAt": "{ISO timestamp}",
   "status": "pending_review"
 }
 ```
+Get the commit SHA and changed files list:
+```powershell
+cd "$HOME\pr-reviews\{repo}\{prId}\worktree"
+$commitSha = git rev-parse HEAD
+$changedFiles = git diff {targetBranch}...HEAD --name-only
+```
 
 #### feedback.json
-Generate feedback items with unique IDs. Each item MUST include file path and line numbers:
+Generate feedback items with unique IDs. Each item MUST include file path, line numbers, and the commit SHA being reviewed:
 ```json
 {
   "items": [
@@ -135,6 +143,7 @@ Generate feedback items with unique IDs. Each item MUST include file path and li
       "file": "src/path/to/file.ts",
       "startLine": 42,
       "endLine": 45,
+      "commitSha": "{same HEAD commit SHA from metadata}",
       "severity": "high|medium|low|info",
       "category": "bug|security|performance|style|design|testing|documentation",
       "title": "Short descriptive title",

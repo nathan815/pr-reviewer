@@ -136,10 +136,32 @@ export async function writeReview(repo, prId, { metadata, feedback, risk, overvi
   await Promise.all(writes);
 }
 
-/** Read a file from the worktree for diff display */
-export async function readWorktreeFile(repo, prId, filePath) {
-  const fullPath = path.join(reviewDir(repo, prId), 'worktree', filePath);
-  return fs.readFile(fullPath, 'utf-8');
+/** Read a file at a specific commit, falling back to HEAD then worktree */
+export async function readFileAtCommit(repo, prId, filePath, commitSha) {
+  const dir = reviewDir(repo, prId);
+  const worktreePath = path.join(dir, 'worktree');
+  const { execFileSync } = await import('child_process');
+
+  // Resolve the ref: explicit commit > HEAD of worktree
+  const ref = commitSha || (() => {
+    try {
+      return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: worktreePath, encoding: 'utf-8' }).trim();
+    } catch { return null; }
+  })();
+
+  if (ref) {
+    try {
+      return execFileSync(
+        'git', ['show', `${ref}:${filePath}`],
+        { cwd: worktreePath, encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
+      );
+    } catch {
+      // Fall through to worktree read
+    }
+  }
+
+  // Final fallback: read from worktree on disk
+  return fs.readFile(path.join(worktreePath, filePath), 'utf-8');
 }
 
 // Helpers

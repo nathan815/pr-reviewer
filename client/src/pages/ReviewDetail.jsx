@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import FeedbackCard from '../components/FeedbackCard';
 import RiskBadge from '../components/RiskBadge';
 import AgentStatusPanel from '../components/AgentStatusPanel';
+import ChangedFiles from '../components/ChangedFiles';
 
 export default function ReviewDetail() {
   const { repo, prId } = useParams();
@@ -13,6 +14,8 @@ export default function ReviewDetail() {
   const [posting, setPosting] = useState(false);
   const [postResult, setPostResult] = useState(null);
   const [relaunching, setRelaunching] = useState(false);
+  const [activeFile, setActiveFile] = useState(null);
+  const feedbackRefs = useRef({});
 
   const loadReview = useCallback(() => {
     fetch(`/api/reviews/${repo}/${prId}`)
@@ -104,8 +107,19 @@ export default function ReviewDetail() {
   const isFailed = metadata.status === 'review_failed';
   const isRequested = metadata.status === 'review_requested';
   const items = feedback.items || [];
-  const filtered = filter === 'all' ? items : items.filter(i => i.status === filter);
+  const filtered = activeFile
+    ? items.filter(i => i.file === activeFile)
+    : filter === 'all' ? items : items.filter(i => i.status === filter);
   const acceptedCount = items.filter(i => i.status === 'accepted').length;
+
+  const handleFileClick = (filePath) => {
+    if (activeFile === filePath) {
+      setActiveFile(null); // toggle off
+    } else {
+      setActiveFile(filePath);
+      setFilter('all');
+    }
+  };
 
   return (
     <>
@@ -169,10 +183,23 @@ export default function ReviewDetail() {
         </div>
       )}
 
+      {/* Changed Files */}
+      <ChangedFiles
+        files={metadata.changedFiles || [...new Set(items.map(i => i.file).filter(Boolean))]}
+        feedbackItems={items}
+        activeFile={activeFile}
+        onFileClick={handleFileClick}
+      />
+
       {/* Feedback Section */}
       <div className="overview-section" style={{ background: 'transparent', border: 'none', padding: '0' }}>
         <div className="toolbar">
-          <h2 style={{ margin: 0 }}>Feedback ({items.length})</h2>
+          <h2 style={{ margin: 0 }}>
+            {activeFile
+              ? <>Feedback for <code style={{ fontSize: 14, color: 'var(--accent)' }}>{activeFile}</code> <button className="btn btn-sm" onClick={() => setActiveFile(null)} style={{ marginLeft: 8 }}>✕ Clear filter</button></>
+              : `Feedback (${items.length})`
+            }
+          </h2>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn" onClick={acceptAll} disabled={!items.some(i => i.status === 'pending')}>
               ✓ Accept All Pending

@@ -4,7 +4,7 @@ import {
   getReview,
   updateFeedbackStatus,
   batchUpdateFeedbackStatus,
-  readWorktreeFile,
+  readFileAtCommit,
   getExamplesSinceCuration,
 } from '../lib/fileStore.js';
 import { launchCurationAgent, getCurationStatus } from '../lib/agentLauncher.js';
@@ -76,12 +76,12 @@ reviewsRouter.post('/:repo/:prId/feedback/batch-update', async (req, res) => {
   }
 });
 
-// Read a file from the worktree
+// Read a file (at specific commit or from worktree)
 reviewsRouter.get('/:repo/:prId/file', async (req, res) => {
   try {
-    const { path: filePath } = req.query;
+    const { path: filePath, commit } = req.query;
     if (!filePath) return res.status(400).json({ error: 'path query parameter required' });
-    const content = await readWorktreeFile(req.params.repo, req.params.prId, filePath);
+    const content = await readFileAtCommit(req.params.repo, req.params.prId, filePath, commit);
     res.type('text/plain').send(content);
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'File not found' });
