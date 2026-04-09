@@ -6,7 +6,9 @@ import {
   batchUpdateFeedbackStatus,
   readFileAtCommit,
   getExamplesSinceCuration,
+  updateMetadata,
 } from '../lib/fileStore.js';
+import { getPRDetails } from '../lib/adoClient.js';
 import { launchCurationAgent, getCurationStatus } from '../lib/agentLauncher.js';
 
 const AUTO_CURATE_THRESHOLD = 20; // auto-curate after this many new decisions
@@ -31,6 +33,51 @@ reviewsRouter.get('/:repo/:prId', async (req, res) => {
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'Review not found' });
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Fetch live PR info from ADO and sync metadata
+reviewsRouter.get('/:repo/:prId/ado-info', async (req, res) => {
+  try {
+    const { repo, prId } = req.params;
+    const pr = await getPRDetails(repo, prId);
+
+    const prStatus = pr.status === 3 ? 'completed'
+      : pr.status === 2 ? 'abandoned'
+      : pr.status === 1 ? 'active'
+      : 'unknown';
+
+    const mergeStatus = pr.mergeStatus === 3 ? 'succeeded'
+      : pr.mergeStatus === 2 ? 'conflicts'
+      : pr.mergeStatus === 1 ? 'queued'
+      : null;
+
+    const info = {
+      title: pr.title,
+      author: pr.createdBy?.displayName || pr.createdBy?.uniqueName,
+      authorAvatar: pr.createdBy?.imageUrl,
+      sourceBranch: pr.sourceRefName?.replace('refs/heads/', ''),
+      targetBranch: pr.targetRefName?.replace('refs/heads/', ''),
+      prStatus,
+      mergeStatus,
+      isDraft: pr.isDraft || false,
+      reviewers: (pr.reviewers || []).map(r => ({
+        name: r.displayName,
+        vote: r.vote, // 10=approved, 5=approved-with-suggestions, -5=wait, -10=rejected, 0=none
+      })),
+      createdAt: pr.creationDate,
+      closedAt: pr.closedDate,
+    };
+
+    // Sync title back to metadata if changed
+    const review = await getReview(repo, prId);
+    if (review.metadata.title !== info.title) {
+      await updateMetadata(repo, prId, { title: info.title });
+    }
+
+    res.json(info);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 });
 

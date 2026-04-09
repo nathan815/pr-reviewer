@@ -142,6 +142,16 @@ export async function writeReview(repo, prId, { metadata, feedback, risk, overvi
   await Promise.all(writes);
 }
 
+/** Update specific fields in metadata.json */
+export async function updateMetadata(repo, prId, updates) {
+  const dir = reviewDir(repo, prId);
+  const metaPath = path.join(dir, 'metadata.json');
+  const metadata = await readJson(metaPath);
+  Object.assign(metadata, updates);
+  await writeJson(metaPath, metadata);
+  return metadata;
+}
+
 /** Read a file at a specific commit, falling back to HEAD then worktree */
 export async function readFileAtCommit(repo, prId, filePath, commitSha) {
   const dir = reviewDir(repo, prId);

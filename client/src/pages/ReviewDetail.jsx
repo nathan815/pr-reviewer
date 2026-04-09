@@ -17,6 +17,7 @@ export default function ReviewDetail() {
   const [postResult, setPostResult] = useState(null);
   const [relaunching, setRelaunching] = useState(false);
   const [activeFile, setActiveFile] = useState(null);
+  const [adoInfo, setAdoInfo] = useState(null);
   const feedbackRefs = useRef({});
 
   const loadReview = useCallback(() => {
@@ -27,6 +28,21 @@ export default function ReviewDetail() {
   }, [repo, prId]);
 
   useEffect(() => { loadReview(); }, [loadReview]);
+
+  useEffect(() => {
+    fetch(`/api/reviews/${repo}/${prId}/ado-info`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) {
+          setAdoInfo(data);
+          // If title was synced, update local review
+          if (data.title && review?.metadata?.title !== data.title) {
+            loadReview();
+          }
+        }
+      })
+      .catch(() => {});
+  }, [repo, prId]);
 
   useEffect(() => {
     if (highlightId && review?.feedback) {
@@ -147,12 +163,35 @@ export default function ReviewDetail() {
           <div>
             <h1 style={{ fontSize: 22, marginBottom: 4 }}>{metadata.title || `PR #${prId}`}</h1>
             <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-              {metadata.author} → {metadata.targetBranch} &nbsp;|&nbsp; {repo} #{prId}
+              {adoInfo?.author || metadata.author} → {metadata.targetBranch} &nbsp;|&nbsp; {repo} #{prId}
+              {adoInfo?.isDraft && <span className="badge" style={{ marginLeft: 8, background: 'rgba(210,153,34,0.15)', color: 'var(--orange)' }}>Draft</span>}
             </div>
-            {metadata.url && (
-              <a href={metadata.url} target="_blank" rel="noopener" style={{ fontSize: 13 }}>
-                Open in ADO ↗
-              </a>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4 }}>
+              {metadata.url && (
+                <a href={metadata.url} target="_blank" rel="noopener" style={{ fontSize: 13 }}>
+                  Open in ADO ↗
+                </a>
+              )}
+              {adoInfo && (
+                <span className={`badge status-pr-${adoInfo.prStatus}`} style={{ fontSize: 12 }}>
+                  {adoInfo.prStatus}{adoInfo.mergeStatus === 'conflicts' ? ' (conflicts)' : ''}
+                </span>
+              )}
+            </div>
+            {adoInfo?.reviewers?.length > 0 && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                {adoInfo.reviewers.map((r, i) => (
+                  <span key={i} className="badge" style={{
+                    background: r.vote === 10 ? 'rgba(63,185,80,0.15)' : r.vote === 5 ? 'rgba(63,185,80,0.1)' :
+                      r.vote === -10 ? 'rgba(248,81,73,0.15)' : r.vote === -5 ? 'rgba(210,153,34,0.15)' : 'rgba(139,148,158,0.1)',
+                    color: r.vote === 10 ? 'var(--green)' : r.vote === 5 ? 'var(--green)' :
+                      r.vote === -10 ? 'var(--red)' : r.vote === -5 ? 'var(--orange)' : 'var(--text-muted)',
+                    fontSize: 12,
+                  }}>
+                    {r.vote === 10 ? '✓' : r.vote === 5 ? '~' : r.vote === -10 ? '✗' : r.vote === -5 ? '⏳' : '·'} {r.name}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

@@ -93,6 +93,12 @@ a:hover { text-decoration: underline; }
 .status-rejected { background: rgba(139,148,158,0.15); color: var(--text-muted); }
 .status-posted { background: rgba(188,140,255,0.15); color: var(--purple); }
 
+/* PR status badges */
+.status-pr-active { background: rgba(63,185,80,0.15); color: var(--green); }
+.status-pr-completed { background: rgba(188,140,255,0.15); color: var(--purple); }
+.status-pr-abandoned { background: rgba(139,148,158,0.15); color: var(--text-muted); }
+.status-pr-unknown { background: rgba(139,148,158,0.1); color: var(--text-muted); }
+
 /* Buttons */
 .btn {
   display: inline-flex;
