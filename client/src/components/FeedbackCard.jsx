@@ -12,7 +12,7 @@ const CATEGORY_ICONS = {
   documentation: '📝',
 };
 
-export default function FeedbackCard({ item, repo, prId, onAccept, onReject, onReset, onPost }) {
+export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onReject, onReset, onPost }) {
   const [postingThis, setPostingThis] = useState(false);
   const [error, setError] = useState(null);
   const [noteText, setNoteText] = useState('');
@@ -21,6 +21,7 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onReject, onR
   const icon = CATEGORY_ICONS[item.category] || '💬';
   const isActionable = item.status === 'pending';
   const isAccepted = item.status === 'accepted';
+  const isNoted = item.status === 'noted';
   const isPosted = item.status === 'posted';
   const isRejected = item.status === 'rejected';
 
@@ -115,11 +116,12 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onReject, onR
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-accept btn-sm" onClick={() => onAccept(noteText)}>✓ Accept</button>
+              <button className="btn btn-noted btn-sm" onClick={() => onNote(noteText)}>✓ Note</button>
               <button className="btn btn-reject btn-sm" onClick={() => onReject(noteText)}>✗ Reject</button>
             </div>
           </>
         )}
-        {(isAccepted || isRejected) && item.userNote && (
+        {(isAccepted || isRejected || isNoted) && item.userNote && (
           <div className="feedback-user-note">📝 {item.userNote}</div>
         )}
         {isAccepted && (
@@ -127,6 +129,12 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onReject, onR
             <button className="btn btn-post btn-sm" onClick={handlePost} disabled={postingThis}>
               {postingThis ? '⏳ Posting...' : '📤 Post to ADO'}
             </button>
+            <button className="btn btn-sm" onClick={onReset}>↩ Reset</button>
+          </div>
+        )}
+        {isNoted && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', padding: '3px 0' }}>Noted — won't post to ADO</span>
             <button className="btn btn-sm" onClick={onReset}>↩ Reset</button>
           </div>
         )}

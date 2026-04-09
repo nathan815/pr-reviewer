@@ -83,9 +83,10 @@ export async function updateFeedbackStatus(repo, prId, feedbackId, newStatus, us
   if (userNote !== undefined) item.userNote = userNote;
   await writeJson(feedbackPath, feedback);
 
-  // Record learning example on accept/reject
-  if (newStatus === 'accepted' || newStatus === 'rejected') {
-    await recordLearningExample(repo, prId, item, newStatus, userNote);
+  // Record learning example on accept/noted/reject
+  if (newStatus === 'accepted' || newStatus === 'noted' || newStatus === 'rejected') {
+    const learnDecision = newStatus === 'noted' ? 'accepted' : newStatus;
+    await recordLearningExample(repo, prId, item, learnDecision, userNote);
   }
 
   return item;

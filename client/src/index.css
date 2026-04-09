@@ -84,6 +84,7 @@ a:hover { text-decoration: underline; }
 /* Status badges */
 .status-pending { background: rgba(210,153,34,0.15); color: var(--orange); }
 .status-accepted { background: rgba(63,185,80,0.15); color: var(--green); }
+.status-noted { background: rgba(88,166,255,0.15); color: var(--accent); }
 .status-rejected { background: rgba(139,148,158,0.15); color: var(--text-muted); }
 .status-posted { background: rgba(188,140,255,0.15); color: var(--purple); }
 
@@ -104,6 +105,8 @@ a:hover { text-decoration: underline; }
 .btn:hover { background: var(--surface-hover); }
 .btn-accept { border-color: var(--green); color: var(--green); }
 .btn-accept:hover { background: rgba(63,185,80,0.15); }
+.btn-noted { border-color: var(--accent); color: var(--accent); }
+.btn-noted:hover { background: rgba(88,166,255,0.15); }
 .btn-reject { border-color: var(--red); color: var(--red); }
 .btn-reject:hover { background: rgba(248,81,73,0.15); }
 .btn-post { background: var(--accent); border-color: var(--accent); color: #fff; }

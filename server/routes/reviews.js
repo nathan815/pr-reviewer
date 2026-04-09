@@ -38,8 +38,8 @@ reviewsRouter.get('/:repo/:prId', async (req, res) => {
 reviewsRouter.patch('/:repo/:prId/feedback/:feedbackId', async (req, res) => {
   try {
     const { status, userNote } = req.body;
-    if (!['pending', 'accepted', 'rejected', 'posted'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid status. Must be: pending, accepted, rejected, posted' });
+    if (!['pending', 'accepted', 'noted', 'rejected', 'posted'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be: pending, accepted, noted, rejected, posted' });
     }
     const item = await updateFeedbackStatus(
       req.params.repo, req.params.prId, req.params.feedbackId, status, userNote
@@ -47,7 +47,7 @@ reviewsRouter.patch('/:repo/:prId/feedback/:feedbackId', async (req, res) => {
     res.json(item);
 
     // Check auto-curation threshold (fire-and-forget)
-    if (status === 'accepted' || status === 'rejected') {
+    if (status === 'accepted' || status === 'noted' || status === 'rejected') {
       getExamplesSinceCuration().then(examples => {
         if (examples.length >= AUTO_CURATE_THRESHOLD && getCurationStatus().status !== 'running') {
           console.log(`[auto-curate] ${examples.length} new decisions — launching curation agent`);

@@ -245,7 +245,7 @@ export default function ReviewDetail() {
         )}
 
         <div className="filter-bar">
-          {['all', 'pending', 'accepted', 'rejected', 'posted'].map(f => {
+          {['all', 'pending', 'accepted', 'noted', 'rejected', 'posted'].map(f => {
             const scope = activeFile ? items.filter(i => i.file === activeFile) : items;
             const count = f === 'all' ? scope.length : scope.filter(i => i.status === f).length;
             return (
@@ -270,6 +270,7 @@ export default function ReviewDetail() {
               repo={repo}
               prId={prId}
               onAccept={(note) => updateStatus(item.id, 'accepted', note)}
+              onNote={(note) => updateStatus(item.id, 'noted', note)}
               onReject={(note) => updateStatus(item.id, 'rejected', note)}
               onReset={() => updateStatus(item.id, 'pending')}
               onPost={() => postSingle(item.id)}
