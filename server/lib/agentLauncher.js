@@ -811,26 +811,11 @@ async function loadPersistedAgentStates() {
             const key = `${repo}/${prId}`;
 
             if (data.status === 'running') {
-              // Check if the review actually completed despite the agent being killed
-              try {
-                const review = await getReview(repo, prId);
-                if (review.metadata?.status === 'agent_review_done') {
-                  data.status = 'completed';
-                  data.completedAt = new Date().toISOString();
-                  console.log(`[agent] ${key} review completed despite server restart`);
-                } else {
-                  data.status = 'failed';
-                  data.error = 'Server restarted while agent was running';
-                  data.completedAt = new Date().toISOString();
-                  await markMetadataFailed(repo, prId, 'Server restarted while agent was running');
-                }
-              } catch {
-                data.status = 'failed';
-                data.error = 'Server restarted while agent was running';
-                data.completedAt = new Date().toISOString();
-                await markMetadataFailed(repo, prId, 'Server restarted while agent was running');
-              }
+              data.status = 'failed';
+              data.error = 'Server restarted while agent was running';
+              data.completedAt = new Date().toISOString();
               await fs.writeFile(statePath, JSON.stringify(data, null, 2), 'utf-8');
+              await markMetadataFailed(repo, prId, 'Server restarted while agent was running');
             }
 
             runningAgents.set(key, {
