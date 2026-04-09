@@ -167,9 +167,10 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
               style={{ cursor: 'pointer' }}
             >
               <div className="agent-item-left">
-                <span className={`agent-status-icon ${agent.status === 'running' ? 'spinning' : ''}`}>
-                  {STATUS_ICONS[agent.status] || '❓'}
-                </span>
+                {agent.status === 'running'
+                  ? <span className="agent-spinner" />
+                  : <span className="agent-status-icon">{STATUS_ICONS[agent.status] || '❓'}</span>
+                }
                 <div>
                   <div className="agent-item-name">
                     {agent.agentType === 'curation' ? 'Curation' : agent.agentType === 'discussion' ? `Discussion · ${agent.feedbackId}` : agent.profileName}

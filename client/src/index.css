@@ -570,9 +570,14 @@ a:hover { text-decoration: underline; }
   gap: 8px;
 }
 .agent-status-icon { font-size: 16px; }
-.agent-status-icon.spinning {
-  display: inline-block;
-  animation: spin 1.5s linear infinite;
+.agent-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
 }
 .agent-item-name { font-size: 14px; font-weight: 500; }
 .agent-item-meta { font-size: 12px; color: var(--text-muted); }
