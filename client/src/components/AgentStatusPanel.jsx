@@ -23,6 +23,21 @@ function AnsiPre({ text }) {
   return <pre dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
+function TruncatedCommand({ command }) {
+  const [expanded, setExpanded] = useState(false);
+  const lines = (command || '').split(/[\s]+/);
+  const truncated = lines.length > 30;
+  const display = expanded || !truncated ? command : command.substring(0, 200) + '...';
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <pre
+        style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 11, padding: 8, background: 'var(--bg-primary)', borderRadius: 4, cursor: truncated ? 'pointer' : 'default' }}
+        onClick={() => truncated && setExpanded(!expanded)}
+      >{display}</pre>
+    </div>
+  );
+}
+
 export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
   const [agents, setAgents] = useState([]);
   const [historyRuns, setHistoryRuns] = useState([]);
@@ -249,11 +264,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
             {/* Expanded: full output */}
             {expandedKey === agent.key && (
               <div className="agent-output-full" ref={outputRef}>
-                {agent.command && (
-                  <div style={{ marginBottom: 8 }}>
-                    <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 11, padding: 8, background: 'var(--bg-primary)', borderRadius: 4 }}>{agent.command}</pre>
-                  </div>
-                )}
+                {agent.command && <TruncatedCommand command={agent.command} />}
                 {fullOutput?.stderr && (
                   <div className="agent-stderr">
                     <div className="agent-output-label">stderr</div>
@@ -305,11 +316,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
 
             {expandedHistoryIdx === i && (
               <div className="agent-output-full">
-                {run.command && (
-                  <div style={{ marginBottom: 8 }}>
-                    <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 11, padding: 8, background: 'var(--bg-primary)', borderRadius: 4 }}>{run.command}</pre>
-                  </div>
-                )}
+                {run.command && <TruncatedCommand command={run.command} />}
                 {run.stdout && (
                   <div className="agent-stdout">
                     <div className="agent-output-label">

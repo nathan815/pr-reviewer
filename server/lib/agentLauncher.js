@@ -283,13 +283,12 @@ CRITICAL RULES:
     '-p', prompt,
   );
 
-  const shellCmd = [program, ...args.map(a => a.includes(' ') || a.includes('\n') ? `"${a.replace(/"/g, '\\"')}"` : a)].join(' ');
-
   const reviewDirPath = path.join(REVIEWS_ROOT, repo, String(prId));
 
-  const child = spawn(shellCmd, [], {
+  // Use spawn with args array (not shell string) to avoid Windows command-line length limit
+  const child = spawn(program, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
-    shell: true,
+    shell: false,
     detached: false,
     cwd: reviewDirPath,
   });
@@ -299,11 +298,13 @@ CRITICAL RULES:
   child.stdout.on('data', d => { stdout += d.toString(); });
   child.stderr.on('data', d => { stderr += d.toString(); });
 
+  const displayCmd = [program, ...args.map(a => a === prompt ? '"<prompt>"' : a)].join(' ');
+
   const agentInfo = {
     key, repo, prId, feedbackId,
     pid: child.pid,
     status: 'running',
-    command: shellCmd,
+    command: displayCmd,
     startedAt: new Date().toISOString(),
     stdout: () => stdout,
     stderr: () => stderr,
