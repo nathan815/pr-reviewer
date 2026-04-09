@@ -23,8 +23,8 @@ agentRouter.get('/status', (_req, res) => {
 });
 
 // Get full output for a specific agent
-agentRouter.get('/output/:repo/:prId', (req, res) => {
-  const output = getAgentOutput(req.params.repo, req.params.prId);
+agentRouter.get('/output/:repo/:prId', async (req, res) => {
+  const output = await getAgentOutput(req.params.repo, req.params.prId);
   if (!output) return res.status(404).json({ error: 'No agent found for this PR' });
   res.json(output);
 });

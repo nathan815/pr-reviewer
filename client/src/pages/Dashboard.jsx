@@ -126,6 +126,9 @@ export default function Dashboard() {
                   {r.status === 'review_requested' && (
                     <span className="badge status-requested">⏳ reviewing...</span>
                   )}
+                  {r.status === 'review_failed' && (
+                    <span className="badge badge-high">❌ failed</span>
+                  )}
                   {r.postedCount > 0 && (
                     <span className="badge status-posted">{r.postedCount} posted</span>
                   )}

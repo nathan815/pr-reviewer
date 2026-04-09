@@ -3,7 +3,7 @@ import { spawn } from 'child_process';
 import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
-import { writeReview } from './fileStore.js';
+import { writeReview, getReview } from './fileStore.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
@@ -11,6 +11,9 @@ const REVIEWS_ROOT = path.join(os.homedir(), 'pr-reviews');
 
 // Track running agent processes: key = `${repo}/${prId}`
 const runningAgents = new Map();
+
+// Load persisted agent states on module init
+await loadPersistedAgentStates();
 
 async function loadConfig() {
   const raw = await fs.readFile(CONFIG_PATH, 'utf-8');
@@ -123,20 +126,25 @@ export async function launchReviewAgent(prUrl, { force = false } = {}) {
   };
 
   runningAgents.set(key, agentInfo);
+  await persistAgentState(agentInfo);
 
-  child.on('close', (code) => {
+  child.on('close', async (code) => {
     agentInfo.status = code === 0 ? 'completed' : 'failed';
     agentInfo.exitCode = code;
     agentInfo.completedAt = new Date().toISOString();
     removeLock(lockPath).catch(() => {});
+    await persistAgentState(agentInfo);
+    if (code !== 0) await markMetadataFailed(repo, prId, `Agent exited with code ${code}`);
     console.log(`[agent] Review of ${key} ${agentInfo.status} (exit ${code})`);
   });
 
-  child.on('error', (err) => {
+  child.on('error', async (err) => {
     agentInfo.status = 'failed';
     agentInfo.error = err.message;
     agentInfo.completedAt = new Date().toISOString();
     removeLock(lockPath).catch(() => {});
+    await persistAgentState(agentInfo);
+    await markMetadataFailed(repo, prId, err.message);
     console.error(`[agent] Failed to launch for ${key}: ${err.message}`);
   });
 
@@ -148,8 +156,8 @@ export async function launchReviewAgent(prUrl, { force = false } = {}) {
 export function getAgentStatuses() {
   const statuses = [];
   for (const [key, info] of runningAgents) {
-    const stdout = info.stdout();
-    const stderr = info.stderr();
+    const stdout = typeof info.stdout === 'function' ? info.stdout() : (info._stdout || '');
+    const stderr = typeof info.stderr === 'function' ? info.stderr() : (info._stderr || '');
     statuses.push({
       key,
       repo: info.repo,
@@ -171,21 +179,33 @@ export function getAgentStatuses() {
 }
 
 /** Get full output for a specific agent */
-export function getAgentOutput(repo, prId) {
+export async function getAgentOutput(repo, prId) {
   const key = `${repo}/${prId}`;
   const info = runningAgents.get(key);
-  if (!info) return null;
-  return {
-    key,
-    status: info.status,
-    pid: info.pid,
-    startedAt: info.startedAt,
-    completedAt: info.completedAt || null,
-    exitCode: info.exitCode ?? null,
-    error: info.error || null,
-    stdout: info.stdout(),
-    stderr: info.stderr(),
-  };
+  if (info) {
+    const stdout = typeof info.stdout === 'function' ? info.stdout() : (info._stdout || '');
+    const stderr = typeof info.stderr === 'function' ? info.stderr() : (info._stderr || '');
+    return {
+      key,
+      status: info.status,
+      pid: info.pid,
+      startedAt: info.startedAt,
+      completedAt: info.completedAt || null,
+      exitCode: info.exitCode ?? null,
+      error: info.error || null,
+      stdout,
+      stderr,
+    };
+  }
+
+  // Fall back to persisted state on disk
+  const statePath = path.join(REVIEWS_ROOT, repo, String(prId), 'agent-state.json');
+  try {
+    const raw = await fs.readFile(statePath, 'utf-8');
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
 /** Get config (profiles + active) for the UI settings */
@@ -229,4 +249,91 @@ function isLockAlive(lockInfo) {
     process.kill(lockInfo.pid, 0); // signal 0 = check if alive
     return true;
   } catch { return false; }
+}
+
+// --- Agent state persistence ---
+
+function agentStatePath(repo, prId) {
+  return path.join(REVIEWS_ROOT, repo, String(prId), 'agent-state.json');
+}
+
+async function persistAgentState(info) {
+  const statePath = agentStatePath(info.repo, info.prId);
+  const stdout = typeof info.stdout === 'function' ? info.stdout() : (info._stdout || '');
+  const stderr = typeof info.stderr === 'function' ? info.stderr() : (info._stderr || '');
+  const data = {
+    key: `${info.repo}/${info.prId}`,
+    repo: info.repo,
+    prId: info.prId,
+    prUrl: info.prUrl,
+    pid: info.pid,
+    status: info.status,
+    profileName: info.profileName,
+    startedAt: info.startedAt,
+    completedAt: info.completedAt || null,
+    exitCode: info.exitCode ?? null,
+    error: info.error || null,
+    stdout,
+    stderr,
+  };
+  try {
+    await fs.mkdir(path.dirname(statePath), { recursive: true });
+    await fs.writeFile(statePath, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error(`[agent] Failed to persist state for ${info.repo}/${info.prId}: ${err.message}`);
+  }
+}
+
+async function markMetadataFailed(repo, prId, reason) {
+  try {
+    const review = await getReview(repo, prId);
+    if (review?.metadata) {
+      review.metadata.status = 'review_failed';
+      review.metadata.failReason = reason;
+      await writeReview(repo, prId, { metadata: review.metadata });
+    }
+  } catch (err) {
+    console.error(`[agent] Failed to mark metadata as failed for ${repo}/${prId}: ${err.message}`);
+  }
+}
+
+/** Load persisted agent states from disk on startup */
+async function loadPersistedAgentStates() {
+  try {
+    const repos = await fs.readdir(REVIEWS_ROOT).catch(() => []);
+    for (const repo of repos) {
+      const repoPath = path.join(REVIEWS_ROOT, repo);
+      const stat = await fs.stat(repoPath).catch(() => null);
+      if (!stat?.isDirectory()) continue;
+
+      const prIds = await fs.readdir(repoPath).catch(() => []);
+      for (const prId of prIds) {
+        const statePath = path.join(repoPath, prId, 'agent-state.json');
+        try {
+          const raw = await fs.readFile(statePath, 'utf-8');
+          const data = JSON.parse(raw);
+          const key = `${repo}/${prId}`;
+
+          // If it was 'running' but the server restarted, mark as failed
+          if (data.status === 'running') {
+            data.status = 'failed';
+            data.error = 'Server restarted while agent was running';
+            data.completedAt = new Date().toISOString();
+            await fs.writeFile(statePath, JSON.stringify(data, null, 2), 'utf-8');
+            await markMetadataFailed(repo, prId, 'Server restarted while agent was running');
+          }
+
+          // Store in memory with persisted stdout/stderr as strings
+          runningAgents.set(key, {
+            ...data,
+            _stdout: data.stdout || '',
+            _stderr: data.stderr || '',
+          });
+        } catch { /* no agent-state.json, skip */ }
+      }
+    }
+    console.log(`[agent] Loaded ${runningAgents.size} persisted agent state(s)`);
+  } catch (err) {
+    console.error(`[agent] Error loading persisted states: ${err.message}`);
+  }
 }
