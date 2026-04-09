@@ -422,6 +422,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   gap: 20px;
   margin-bottom: 20px;
+  flex-wrap: wrap;
 }
 .stat-box {
   background: var(--surface);
@@ -430,6 +431,7 @@ a:hover { text-decoration: underline; }
   padding: 16px 20px;
   text-align: center;
   flex: 1;
+  min-width: 100px;
 }
 .stat-value {
   font-size: 28px;
@@ -828,4 +830,48 @@ a:hover { text-decoration: underline; }
   border-radius: 6px;
   color: var(--green);
   font-size: 13px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .container { padding: 0 12px; }
+  .app-header .container { flex-direction: column; gap: 8px; align-items: flex-start; }
+  .app-header nav { gap: 4px; }
+  .app-header nav a { padding: 4px 8px; font-size: 13px; }
+
+  .stats-row { gap: 10px; }
+  .stat-box { padding: 10px 12px; min-width: 70px; }
+  .stat-value { font-size: 20px; }
+  .stat-label { font-size: 10px; }
+
+  .toolbar { gap: 8px; }
+
+  /* Table → card layout on mobile */
+  .pr-table thead { display: none; }
+  .pr-table, .pr-table tbody, .pr-table tr, .pr-table td {
+    display: block;
+    width: 100%;
+  }
+  .pr-table tr {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .pr-table tr:hover td { background: none; }
+  .pr-table td {
+    padding: 2px 0;
+    border: none;
+    font-size: 13px;
+  }
+  .pr-table td:first-child { margin-bottom: 4px; }
+
+  /* Agent panel */
+  .agent-output-full { max-height: 300px; }
+  .agent-output-full pre { font-size: 10px; }
+
+  /* Feedback cards */
+  .feedback-actions { flex-wrap: wrap; }
+  .feedback-header { flex-wrap: wrap; gap: 6px; }
+
+  /* Filter bar */
+  .filter-bar { flex-wrap: wrap; }
 }
