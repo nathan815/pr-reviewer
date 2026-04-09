@@ -243,8 +243,6 @@ export default function ReviewDetail() {
               </button>
             );
           })}
-            </button>
-          ))}
         </div>
 
         {filtered.length === 0 ? (
