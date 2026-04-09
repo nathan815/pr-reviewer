@@ -175,13 +175,14 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched, filterTypes
                 }
                 <div>
                   <div className="agent-item-name">
-                    {agent.agentType === 'curation' ? 'Curation' : agent.agentType === 'discussion' ? `Discussion · ${agent.feedbackId}` : agent.profileName}
+                    {agent.agentType === 'curation' ? 'Curation' : agent.agentType === 'discussion' ? `Discussion · ${agent.feedbackId}` : `Reviewer · ${agent.profileName}`}
                   </div>
                   <div className="agent-item-meta">
+                    {!repo && agent.repo && agent.prId
+                      ? <><Link to={`/review/${agent.repo}/${agent.prId}`} onClick={e => e.stopPropagation()} style={{ color: 'var(--accent)' }}>{agent.key}</Link> · </>
+                      : agent.key ? <>{agent.key} · </> : null
+                    }
                     PID {agent.pid} · {timeAgo(agent.startedAt)}
-                    {!repo && agent.repo && agent.prId && (
-                      <> · <Link to={`/review/${agent.repo}/${agent.prId}`} onClick={e => e.stopPropagation()} style={{ color: 'var(--accent)' }}>{agent.repo}/{agent.prId}</Link></>
-                    )}
                   </div>
                 </div>
               </div>
@@ -296,7 +297,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched, filterTypes
                   {STATUS_ICONS[run.status] || <IconBot />}
                 </span>
                 <div>
-                  <div className="agent-item-name">{run.profileName || 'unknown'}</div>
+                  <div className="agent-item-name">Reviewer · {run.profileName || 'unknown'}</div>
                   <div className="agent-item-meta">
                     PID {run.pid} · {run.startedAt ? timeAgo(run.startedAt) : 'unknown'}
                   </div>
