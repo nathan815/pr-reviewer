@@ -17,17 +17,17 @@ async function loadConfig() {
 
 /** Parse an ADO PR URL into { org, project, repo, prId } */
 export function parsePrUrl(url) {
-  // HTTPS: https://dev.azure.com/{org}/{project}/_git/{repo}/pullrequest/{prId}
+  // HTTPS: https://dev.azure.com/{org}/[DefaultCollection/]{project}/_git/{repo}/pullrequest/{prId}
   const httpsMatch = url.match(
-    /dev\.azure\.com\/([^/]+)\/([^/]+)\/_git\/([^/]+)\/pullrequest\/(\d+)/
+    /dev\.azure\.com\/([^/]+)\/(?:DefaultCollection\/)?([^/]+)\/_git\/([^/]+)\/pullrequest\/(\d+)/
   );
   if (httpsMatch) {
     return { org: httpsMatch[1], project: httpsMatch[2], repo: httpsMatch[3], prId: Number(httpsMatch[4]) };
   }
 
-  // Visual Studio format: https://{org}.visualstudio.com/{project}/_git/{repo}/pullrequest/{prId}
+  // Visual Studio format: https://{org}.visualstudio.com/[DefaultCollection/]{project}/_git/{repo}/pullrequest/{prId}
   const vsMatch = url.match(
-    /([^/]+)\.visualstudio\.com\/([^/]+)\/_git\/([^/]+)\/pullrequest\/(\d+)/
+    /([^/]+)\.visualstudio\.com\/(?:DefaultCollection\/)?([^/]+)\/_git\/([^/]+)\/pullrequest\/(\d+)/
   );
   if (vsMatch) {
     return { org: vsMatch[1], project: vsMatch[2], repo: vsMatch[3], prId: Number(vsMatch[4]) };
