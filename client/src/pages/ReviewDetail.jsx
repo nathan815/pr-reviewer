@@ -230,14 +230,19 @@ export default function ReviewDetail() {
         )}
 
         <div className="filter-bar">
-          {['all', 'pending', 'accepted', 'rejected', 'posted'].map(f => (
-            <button
-              key={f}
-              className={`filter-btn ${filter === f ? 'active' : ''}`}
-              onClick={() => setFilter(f)}
-            >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
-              {f !== 'all' && ` (${items.filter(i => i.status === f).length})`}
+          {['all', 'pending', 'accepted', 'rejected', 'posted'].map(f => {
+            const scope = activeFile ? items.filter(i => i.file === activeFile) : items;
+            const count = f === 'all' ? scope.length : scope.filter(i => i.status === f).length;
+            return (
+              <button
+                key={f}
+                className={`filter-btn ${filter === f ? 'active' : ''}`}
+                onClick={() => setFilter(f)}
+              >
+                {f.charAt(0).toUpperCase() + f.slice(1)} ({count})
+              </button>
+            );
+          })}
             </button>
           ))}
         </div>
