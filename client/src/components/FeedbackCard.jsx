@@ -32,6 +32,22 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
   const isRejected = item.status === 'rejected';
   const discussion = item.discussion || [];
 
+  // Check if a discussion agent is already running on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/reviews/${repo}/${prId}/feedback/${item.id}/discuss`);
+        const data = await res.json();
+        if (!cancelled && data.status === 'running') {
+          setDiscussing(true);
+          setShowDiscussion(true);
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [repo, prId, item.id]);
+
   // Poll discussion agent status when active
   useEffect(() => {
     if (!discussing) return;
