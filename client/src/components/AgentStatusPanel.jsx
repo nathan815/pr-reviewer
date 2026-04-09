@@ -182,8 +182,8 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched }) {
               <div className="agent-error">{agent.error}</div>
             )}
 
-            {/* Action buttons - only show when there are actions */}
-            {(agent.status === 'running' || agent.status === 'failed') && (
+            {/* Action buttons - only on PR detail page */}
+            {repo && (agent.status === 'running' || agent.status === 'failed') && (
             <div style={{ padding: '6px 16px', borderTop: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', gap: 8 }}>
                 {agent.status === 'running' && (
