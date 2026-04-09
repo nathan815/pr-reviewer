@@ -381,3 +381,143 @@ async function loadPersistedAgentStates() {
     console.error(`[agent] Error loading persisted states: ${err.message}`);
   }
 }
+
+// --- Curation Agent ---
+
+let curationAgent = null;
+
+export async function launchCurationAgent() {
+  if (curationAgent?.status === 'running') {
+    return { status: 'already_running', pid: curationAgent.pid };
+  }
+
+  const config = await loadConfig();
+  const profileName = config.activeProfile || 'copilot-cli';
+  const profile = config.profiles[profileName];
+  if (!profile) throw new Error(`Profile ${profileName} not found`);
+
+  const { getGuidelines, getExamplesSinceCuration, getLearningExamples, listRepoGuidelines } = await import('./fileStore.js');
+  const { global: globalGuidelines } = await getGuidelines();
+  const reposWithGuidelines = await listRepoGuidelines();
+  const newExamples = await getExamplesSinceCuration();
+  const allExamples = await getLearningExamples();
+
+  if (newExamples.length === 0 && globalGuidelines) {
+    return { status: 'skipped', reason: 'No new examples since last curation' };
+  }
+
+  // Group examples by repo for the agent to see patterns
+  const repos = [...new Set(allExamples.map(e => e.repo))];
+
+  // Build the curation prompt
+  const formatExample = e =>
+    `[${e.decision.toUpperCase()}] (${e.category}/${e.severity}) [${e.repo}] "${e.title}" — ${e.comment}${e.userNote ? `\n  User note: ${e.userNote}` : ''}`;
+
+  const statsBlock = [
+    `Total examples: ${allExamples.length} (${allExamples.filter(e=>e.decision==='accepted').length} accepted, ${allExamples.filter(e=>e.decision==='rejected').length} rejected)`,
+    `Repos: ${repos.join(', ')}`,
+  ].join('\n');
+
+  let prompt = `You are a reviewer guidelines curator. Your job is to maintain two levels of reviewer guidelines based on the user's accept/reject decisions on PR review comments:\n\n`;
+  prompt += `1. **Global guidelines** at ~/pr-reviews/.learnings/guidelines.md — rules that apply across all repos\n`;
+  prompt += `2. **Per-repo guidelines** at ~/pr-reviews/.learnings/repo/{repoName}/guidelines.md — rules specific to a codebase\n\n`;
+  prompt += `${statsBlock}\n\n`;
+
+  // Include existing guidelines
+  if (globalGuidelines) {
+    prompt += `## Current Global Guidelines (build on these, do not discard)\n\`\`\`\n${globalGuidelines}\n\`\`\`\n\n`;
+  }
+  for (const repo of reposWithGuidelines) {
+    const { perRepo } = await getGuidelines(repo);
+    if (perRepo) {
+      prompt += `## Current ${repo} Guidelines (build on these)\n\`\`\`\n${perRepo}\n\`\`\`\n\n`;
+    }
+  }
+
+  // Include examples
+  if (globalGuidelines) {
+    const examplesBlock = newExamples.map(formatExample).join('\n');
+    prompt += `## New Examples Since Last Curation (${newExamples.length} items)\n${examplesBlock}\n\n`;
+  } else {
+    const allBlock = allExamples.map(formatExample).join('\n');
+    prompt += `## All Examples (${allExamples.length} items)\n${allBlock}\n\n`;
+  }
+
+  prompt += `## Instructions\n`;
+  prompt += `1. Analyze the examples and identify which patterns are universal vs repo-specific\n`;
+  prompt += `2. A pattern is repo-specific if it only appears in one repo AND relates to that repo's specific tech/conventions\n`;
+  prompt += `3. Everything else goes in global guidelines\n`;
+  prompt += `4. If existing guidelines exist, MERGE new learnings in — keep all still-valid rules, refine or remove contradicted ones\n`;
+  prompt += `5. Write updated global guidelines to ~/pr-reviews/.learnings/guidelines.md\n`;
+  prompt += `6. For each repo with specific patterns, write to ~/pr-reviews/.learnings/repo/{repoName}/guidelines.md\n`;
+  prompt += `7. After writing all files, write the current ISO timestamp to ~/pr-reviews/.learnings/.last-curated\n\n`;
+  prompt += `## Guidelines format\n`;
+  prompt += `Each guidelines file should have these sections:\n`;
+  prompt += `- **DO comment on** — patterns the reviewer wants flagged\n`;
+  prompt += `- **DON'T comment on** — patterns the reviewer does not want\n`;
+  prompt += `- **Severity calibration** — what severity levels to use for different issue types\n`;
+  prompt += `- **Style & tone** — how comments should be phrased\n`;
+  prompt += `- **Category-specific notes** — per-category preferences\n`;
+  prompt += `Include specific examples from the data to illustrate each rule.\n`;
+  prompt += `For per-repo files, focus on what's unique to that codebase (tech stack, naming conventions, patterns used, etc.).\n`;
+
+  // Build args — replace the review prompt with curation prompt
+  const args = [...profile.args];
+  const promptIdx = args.indexOf('-p');
+  if (promptIdx !== -1) {
+    args[promptIdx + 1] = prompt;
+  } else {
+    args.push('-p', prompt);
+  }
+
+  const cmdStr = `${profile.program} ${args.map(a => a.includes(' ') || a.includes('\n') ? `"${a.replace(/"/g, '\\"')}"` : a).join(' ')}`;
+  const child = spawn(cmdStr, [], { shell: true, cwd: os.homedir() });
+
+  let stdout = '';
+  let stderr = '';
+  child.stdout?.on('data', d => { stdout += d.toString(); });
+  child.stderr?.on('data', d => { stderr += d.toString(); });
+
+  curationAgent = {
+    status: 'running',
+    pid: child.pid,
+    startedAt: new Date().toISOString(),
+    stdout: () => stdout,
+    stderr: () => stderr,
+  };
+
+  child.on('close', async (code) => {
+    curationAgent.status = code === 0 ? 'completed' : 'failed';
+    curationAgent.exitCode = code;
+    curationAgent.completedAt = new Date().toISOString();
+    curationAgent._stdout = stdout;
+    curationAgent._stderr = stderr;
+    console.log(`[curation] Agent ${curationAgent.status} (exit ${code})`);
+  });
+
+  child.on('error', (err) => {
+    curationAgent.status = 'failed';
+    curationAgent.error = err.message;
+    curationAgent.completedAt = new Date().toISOString();
+    curationAgent._stdout = stdout;
+    curationAgent._stderr = stderr;
+  });
+
+  return { status: 'launched', pid: child.pid };
+}
+
+export function getCurationStatus() {
+  if (!curationAgent) return { status: 'idle', message: 'No curation has been run' };
+  const out = typeof curationAgent.stdout === 'function' ? curationAgent.stdout() : (curationAgent._stdout || '');
+  const err = typeof curationAgent.stderr === 'function' ? curationAgent.stderr() : (curationAgent._stderr || '');
+  return {
+    status: curationAgent.status,
+    pid: curationAgent.pid,
+    startedAt: curationAgent.startedAt,
+    completedAt: curationAgent.completedAt || null,
+    exitCode: curationAgent.exitCode ?? null,
+    error: curationAgent.error || null,
+    outputTail: out.slice(-2000),
+    stderrTail: err.slice(-1000),
+  };
+}

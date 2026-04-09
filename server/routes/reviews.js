@@ -5,7 +5,11 @@ import {
   updateFeedbackStatus,
   batchUpdateFeedbackStatus,
   readWorktreeFile,
+  getExamplesSinceCuration,
 } from '../lib/fileStore.js';
+import { launchCurationAgent, getCurationStatus } from '../lib/agentLauncher.js';
+
+const AUTO_CURATE_THRESHOLD = 20; // auto-curate after this many new decisions
 
 export const reviewsRouter = Router();
 
@@ -33,14 +37,26 @@ reviewsRouter.get('/:repo/:prId', async (req, res) => {
 // Update a single feedback item's status
 reviewsRouter.patch('/:repo/:prId/feedback/:feedbackId', async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, userNote } = req.body;
     if (!['pending', 'accepted', 'rejected', 'posted'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status. Must be: pending, accepted, rejected, posted' });
     }
     const item = await updateFeedbackStatus(
-      req.params.repo, req.params.prId, req.params.feedbackId, status
+      req.params.repo, req.params.prId, req.params.feedbackId, status, userNote
     );
     res.json(item);
+
+    // Check auto-curation threshold (fire-and-forget)
+    if (status === 'accepted' || status === 'rejected') {
+      getExamplesSinceCuration().then(examples => {
+        if (examples.length >= AUTO_CURATE_THRESHOLD && getCurationStatus().status !== 'running') {
+          console.log(`[auto-curate] ${examples.length} new decisions — launching curation agent`);
+          launchCurationAgent().catch(err =>
+            console.error(`[auto-curate] Failed: ${err.message}`)
+          );
+        }
+      }).catch(() => {});
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

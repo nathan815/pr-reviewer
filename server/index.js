@@ -3,6 +3,7 @@ import cors from 'cors';
 import { reviewsRouter } from './routes/reviews.js';
 import { adoRouter } from './routes/ado.js';
 import { agentRouter } from './routes/agent.js';
+import { learningsRouter } from './routes/learnings.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -17,6 +18,7 @@ app.use(express.json());
 app.use('/api/reviews', reviewsRouter);
 app.use('/api/ado', adoRouter);
 app.use('/api/agent', agentRouter);
+app.use('/api/learnings', learningsRouter);
 
 // Serve built React client in production
 const publicDir = path.join(__dirname, 'public');

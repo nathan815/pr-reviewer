@@ -171,8 +171,35 @@ a:hover { text-decoration: underline; }
 }
 .feedback-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px 16px 12px;
+  align-items: center;
+}
+.feedback-note-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+.feedback-note-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text);
+  outline: none;
+}
+.feedback-note-input:focus { border-color: var(--accent); }
+.feedback-note-input::placeholder { color: var(--text-muted); }
+.feedback-user-note {
+  width: 100%;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 0;
+  font-style: italic;
 }
 
 /* Code snippet */

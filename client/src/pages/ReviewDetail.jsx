@@ -23,11 +23,11 @@ export default function ReviewDetail() {
 
   useEffect(() => { loadReview(); }, [loadReview]);
 
-  const updateStatus = async (feedbackId, status) => {
+  const updateStatus = async (feedbackId, status, userNote) => {
     await fetch(`/api/reviews/${repo}/${prId}/feedback/${feedbackId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, ...(userNote ? { userNote } : {}) }),
     });
     loadReview();
   };
@@ -223,8 +223,8 @@ export default function ReviewDetail() {
               item={item}
               repo={repo}
               prId={prId}
-              onAccept={() => updateStatus(item.id, 'accepted')}
-              onReject={() => updateStatus(item.id, 'rejected')}
+              onAccept={(note) => updateStatus(item.id, 'accepted', note)}
+              onReject={(note) => updateStatus(item.id, 'rejected', note)}
               onReset={() => updateStatus(item.id, 'pending')}
               onPost={() => postSingle(item.id)}
             />

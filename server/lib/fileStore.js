@@ -3,6 +3,9 @@ import path from 'path';
 import os from 'os';
 
 const REVIEWS_ROOT = path.join(os.homedir(), 'pr-reviews');
+const LEARNINGS_DIR = path.join(REVIEWS_ROOT, '.learnings');
+const EXAMPLES_PATH = path.join(LEARNINGS_DIR, 'examples.jsonl');
+const GUIDELINES_PATH = path.join(LEARNINGS_DIR, 'guidelines.md');
 
 export async function ensureDir(dir) {
   await fs.mkdir(dir, { recursive: true });
@@ -67,7 +70,7 @@ export async function getReview(repo, prId) {
 }
 
 /** Update the status of a single feedback item */
-export async function updateFeedbackStatus(repo, prId, feedbackId, newStatus) {
+export async function updateFeedbackStatus(repo, prId, feedbackId, newStatus, userNote) {
   const dir = reviewDir(repo, prId);
   const feedbackPath = path.join(dir, 'feedback.json');
   const feedback = await readJson(feedbackPath);
@@ -76,7 +79,14 @@ export async function updateFeedbackStatus(repo, prId, feedbackId, newStatus) {
   if (!item) throw new Error(`Feedback item ${feedbackId} not found`);
 
   item.status = newStatus;
+  if (userNote !== undefined) item.userNote = userNote;
   await writeJson(feedbackPath, feedback);
+
+  // Record learning example on accept/reject
+  if (newStatus === 'accepted' || newStatus === 'rejected') {
+    await recordLearningExample(repo, prId, item, newStatus, userNote);
+  }
+
   return item;
 }
 
@@ -140,4 +150,115 @@ async function readJson(filePath) {
 
 async function writeJson(filePath, data) {
   await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+// --- Learnings ---
+
+/** Append a learning example when user accepts/rejects feedback */
+async function recordLearningExample(repo, prId, item, decision, userNote) {
+  await ensureDir(LEARNINGS_DIR);
+  const example = {
+    timestamp: new Date().toISOString(),
+    repo,
+    prId,
+    decision,
+    userNote: userNote || null,
+    feedbackId: item.id,
+    category: item.category,
+    severity: item.severity,
+    title: item.title,
+    comment: item.comment,
+    suggestion: item.suggestion || null,
+    file: item.file,
+    startLine: item.startLine,
+    endLine: item.endLine,
+  };
+  await fs.appendFile(EXAMPLES_PATH, JSON.stringify(example) + '\n', 'utf-8');
+}
+
+/** Get all learning examples */
+export async function getLearningExamples() {
+  try {
+    const raw = await fs.readFile(EXAMPLES_PATH, 'utf-8');
+    return raw.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+  } catch {
+    return [];
+  }
+}
+
+/** Get learning stats summary */
+export async function getLearningStats() {
+  const examples = await getLearningExamples();
+  const accepted = examples.filter(e => e.decision === 'accepted');
+  const rejected = examples.filter(e => e.decision === 'rejected');
+
+  const byCat = {};
+  for (const ex of examples) {
+    if (!byCat[ex.category]) byCat[ex.category] = { accepted: 0, rejected: 0 };
+    byCat[ex.category][ex.decision]++;
+  }
+
+  return {
+    total: examples.length,
+    accepted: accepted.length,
+    rejected: rejected.length,
+    acceptRate: examples.length ? Math.round(accepted.length / examples.length * 100) : 0,
+    byCategory: byCat,
+    withNotes: examples.filter(e => e.userNote).length,
+  };
+}
+
+/** Read the curated guidelines (global, per-repo, or both) */
+export async function getGuidelines(repo) {
+  const global = await fs.readFile(GUIDELINES_PATH, 'utf-8').catch(() => null);
+  let perRepo = null;
+  if (repo) {
+    perRepo = await fs.readFile(
+      path.join(LEARNINGS_DIR, 'repo', repo, 'guidelines.md'), 'utf-8'
+    ).catch(() => null);
+  }
+  return { global, perRepo };
+}
+
+/** List all repos that have repo-specific guidelines */
+export async function listRepoGuidelines() {
+  const repoDir = path.join(LEARNINGS_DIR, 'repo');
+  try {
+    const repos = await fs.readdir(repoDir);
+    const result = [];
+    for (const repo of repos) {
+      const gp = path.join(repoDir, repo, 'guidelines.md');
+      const exists = await fs.stat(gp).then(() => true).catch(() => false);
+      if (exists) result.push(repo);
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
+
+/** Get examples added since last curation */
+export async function getExamplesSinceCuration() {
+  const lastCuratedAt = await fs.readFile(
+    path.join(LEARNINGS_DIR, '.last-curated'), 'utf-8'
+  ).catch(() => '1970-01-01T00:00:00Z');
+  const cutoff = new Date(lastCuratedAt.trim()).getTime();
+  const all = await getLearningExamples();
+  return all.filter(e => new Date(e.timestamp).getTime() > cutoff);
+}
+
+/** Mark curation as complete — snapshot existing guidelines to history */
+export async function markCurationComplete() {
+  await ensureDir(LEARNINGS_DIR);
+  const historyDir = path.join(LEARNINGS_DIR, 'history');
+  await ensureDir(historyDir);
+
+  // Archive current global guidelines before overwrite
+  const { global } = await getGuidelines();
+  if (global) {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    await fs.writeFile(path.join(historyDir, `guidelines-${ts}.md`), global, 'utf-8');
+  }
+
+  await fs.writeFile(path.join(LEARNINGS_DIR, '.last-curated'), new Date().toISOString(), 'utf-8');
 }

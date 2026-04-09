@@ -84,7 +84,21 @@ git diff {targetBranch}...HEAD --name-only
 git diff {targetBranch}...HEAD
 ```
 
-### Step 7: Review the code
+### Step 7: Load reviewer guidelines
+Before reviewing, check for curated guidelines that reflect the user's preferences:
+```powershell
+# Global guidelines
+if (Test-Path "$HOME\pr-reviews\.learnings\guidelines.md") {
+  Get-Content "$HOME\pr-reviews\.learnings\guidelines.md"
+}
+# Repo-specific guidelines
+if (Test-Path "$HOME\pr-reviews\.learnings\repo\{repo}\guidelines.md") {
+  Get-Content "$HOME\pr-reviews\.learnings\repo\{repo}\guidelines.md"
+}
+```
+If guidelines exist, follow them closely — they represent the user's calibrated preferences for what to comment on, what to ignore, severity levels, and tone. Repo-specific guidelines take precedence over global ones for that repo.
+
+### Step 8: Review the code
 For each changed file, analyze the diff and generate feedback. Look for:
 - **Bugs**: Logic errors, null references, off-by-one errors, race conditions
 - **Security**: Injection vulnerabilities, auth issues, secrets exposure, input validation
@@ -93,7 +107,7 @@ For each changed file, analyze the diff and generate feedback. Look for:
 - **Testing**: Missing tests for new code, untested edge cases
 - **Documentation**: Missing or outdated comments for public APIs
 
-### Step 8: Write review files
+### Step 9: Write review files
 Write the following files to `~/pr-reviews/{repo}/{prId}/`:
 
 #### metadata.json
@@ -154,7 +168,7 @@ Write a human-readable summary covering:
 - Overall assessment and recommendation
 - Any questions for the author
 
-### Step 9: Release lock and confirm
+### Step 10: Release lock and confirm
 Remove the lockfile and update metadata status:
 ```powershell
 Remove-Item "$HOME\pr-reviews\{repo}\{prId}\.review.lock" -Force -ErrorAction SilentlyContinue

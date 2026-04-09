@@ -15,6 +15,8 @@ const CATEGORY_ICONS = {
 export default function FeedbackCard({ item, repo, prId, onAccept, onReject, onReset, onPost }) {
   const [postingThis, setPostingThis] = useState(false);
   const [error, setError] = useState(null);
+  const [noteText, setNoteText] = useState('');
+  const [showNote, setShowNote] = useState(false);
 
   const icon = CATEGORY_ICONS[item.category] || '💬';
   const isActionable = item.status === 'pending';
@@ -91,9 +93,33 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onReject, onR
       <div className="feedback-actions">
         {isActionable && (
           <>
-            <button className="btn btn-accept btn-sm" onClick={onAccept}>✓ Accept</button>
-            <button className="btn btn-reject btn-sm" onClick={onReject}>✗ Reject</button>
+            <div className="feedback-note-row">
+              <button
+                className="btn btn-sm"
+                onClick={() => setShowNote(!showNote)}
+                style={{ color: 'var(--text-muted)', fontSize: 11 }}
+              >
+                {showNote ? '▼' : '▶'} Add note
+              </button>
+              {showNote && (
+                <input
+                  type="text"
+                  className="feedback-note-input"
+                  placeholder="Why accept/reject? (optional — helps train future reviews)"
+                  value={noteText}
+                  onChange={e => setNoteText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') onAccept(noteText); }}
+                />
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-accept btn-sm" onClick={() => onAccept(noteText)}>✓ Accept</button>
+              <button className="btn btn-reject btn-sm" onClick={() => onReject(noteText)}>✗ Reject</button>
+            </div>
           </>
+        )}
+        {(isAccepted || isRejected) && item.userNote && (
+          <div className="feedback-user-note">📝 {item.userNote}</div>
         )}
         {isAccepted && (
           <>
