@@ -361,7 +361,7 @@ export async function getFileDiff(repo, prId, filePath, commitSha, contextLines 
 }
 
 /** Add a discussion message to a feedback item */
-export async function addDiscussionMessage(repo, prId, feedbackId, role, message) {
+export async function addDiscussionMessage(repo, prId, feedbackId, role, message, extra = {}) {
   const dir = reviewDir(repo, prId);
   const filePath = await findFeedbackFile(dir, feedbackId);
 
@@ -370,7 +370,7 @@ export async function addDiscussionMessage(repo, prId, feedbackId, role, message
     const item = feedback.items.find(i => i.id === feedbackId);
     if (!item) throw new Error(`Feedback item ${feedbackId} not found`);
     if (!item.discussion) item.discussion = [];
-    const entry = { role, message, timestamp: new Date().toISOString() };
+    const entry = { role, message, timestamp: new Date().toISOString(), ...extra };
     item.discussion.push(entry);
     await writeJson(filePath, feedback);
     return entry;
@@ -389,24 +389,36 @@ export async function updateFeedbackContent(repo, prId, feedbackId, updates) {
 
     if (!item.editHistory) item.editHistory = [];
     const snapshot = {};
+    const changes = [];
     const editableFields = ['title', 'comment', 'suggestion', 'severity', 'category', 'startLine', 'endLine', 'file'];
     for (const field of editableFields) {
       if (updates[field] !== undefined && updates[field] !== item[field]) {
         snapshot[field] = item[field];
+        changes.push({
+          field,
+          previous: item[field],
+          current: updates[field],
+        });
         item[field] = updates[field];
       }
     }
 
+    let editSummary = null;
     if (Object.keys(snapshot).length > 0) {
+      const editedAt = new Date().toISOString();
       item.editHistory.push({
         previous: snapshot,
-        editedAt: new Date().toISOString(),
+        editedAt,
         editedBy: 'discussion-agent',
       });
+      editSummary = {
+        editedAt,
+        changes,
+      };
     }
 
     await writeJson(filePath, feedback);
-    return item;
+    return { item, editSummary };
   });
 }
 

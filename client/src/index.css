@@ -156,6 +156,20 @@ a:hover { text-decoration: underline; }
   align-items: center;
   gap: 10px;
 }
+.feedback-number-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(88, 166, 255, 0.12);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+}
 .feedback-file {
   font-family: 'Cascadia Code', 'Fira Code', monospace;
   font-size: 13px;
@@ -229,6 +243,50 @@ a:hover { text-decoration: underline; }
   color: var(--text-muted);
   padding: 4px 0;
   font-style: italic;
+}
+.discussion-message {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.discussion-message-user {
+  background: rgba(139, 148, 158, 0.12);
+}
+.discussion-message-agent {
+  background: rgba(88, 166, 255, 0.1);
+}
+.discussion-message-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.discussion-edit-summary {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.discussion-edit-summary-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.discussion-edit-summary-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.discussion-edit-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(88, 166, 255, 0.12);
+  color: var(--accent);
+  font-size: 11px;
 }
 .feedback-footer-meta {
   display: flex;
@@ -590,7 +648,6 @@ a:hover { text-decoration: underline; }
 .filter-bar {
   display: flex;
   gap: 8px;
-  margin-bottom: 16px;
   flex-wrap: wrap;
 }
 .filter-btn {
@@ -609,7 +666,67 @@ a:hover { text-decoration: underline; }
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.review-feedback-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   margin-bottom: 16px;
+  padding: 14px 16px;
+  background: var(--bg);
+  border: none;
+  border-radius: 0;
+}
+.review-feedback-toolbar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -14px;
+  height: 14px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(1, 4, 9, 0.45), rgba(1, 4, 9, 0));
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.review-feedback-toolbar.is-sticky::after {
+  opacity: 1;
+}
+.review-file-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.review-file-filter-label {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.review-file-filter-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: none;
+  line-height: 1.2;
+}
+.review-file-filter-button:hover {
+  text-decoration: underline;
+}
+.review-file-filter-link-text,
+.review-file-filter-button code {
+  color: var(--accent);
+  font-size: 13px;
+}
+.review-feedback-toolbar .filter-bar {
+  margin-top: 12px;
 }
 
 /* Loading / empty */
@@ -652,6 +769,12 @@ a:hover { text-decoration: underline; }
   margin-bottom: 16px;
 }
 .back-link:hover { color: var(--text); text-decoration: none; }
+.review-jump-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
 
 /* review_requested status */
 .status-requested { background: rgba(88,166,255,0.15); color: var(--accent); }
@@ -966,6 +1089,10 @@ a:hover { text-decoration: underline; }
   .stat-label { font-size: 10px; }
 
   .toolbar { gap: 8px; }
+  .review-feedback-toolbar {
+    top: 0;
+    padding: 12px;
+  }
 
   /* Table → card layout on mobile */
   .pr-table thead { display: none; }

@@ -50,6 +50,22 @@ export function IconSend(props) {
   );
 }
 
+export function IconArrowUp(props) {
+  return (
+    <svg {...s} {...props} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 13V3" /><polyline points="4.5 6.5 8 3 11.5 6.5" />
+    </svg>
+  );
+}
+
+export function IconArrowDown(props) {
+  return (
+    <svg {...s} {...props} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3v10" /><polyline points="4.5 9.5 8 13 11.5 9.5" />
+    </svg>
+  );
+}
+
 export function IconNote(props) {
   return (
     <svg {...s} {...props} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

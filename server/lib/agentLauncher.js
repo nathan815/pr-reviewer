@@ -324,15 +324,24 @@ CRITICAL RULES:
       const parsed = JSON.parse(raw);
       agentInfo.response = parsed.response;
 
-      // Record agent response in discussion thread
-      if (parsed.response) {
-        await addDiscussionMessage(repo, prId, feedbackId, 'agent', parsed.response);
+      // Apply edits if the agent suggested them
+      let editSummary = null;
+      if (parsed.updatedItem && typeof parsed.updatedItem === 'object') {
+        const updateResult = await updateFeedbackContent(repo, prId, feedbackId, parsed.updatedItem);
+        editSummary = updateResult.editSummary;
+        agentInfo.updatedFields = editSummary?.changes?.map(change => change.field) || Object.keys(parsed.updatedItem);
       }
 
-      // Apply edits if the agent suggested them
-      if (parsed.updatedItem && typeof parsed.updatedItem === 'object') {
-        await updateFeedbackContent(repo, prId, feedbackId, parsed.updatedItem);
-        agentInfo.updatedFields = Object.keys(parsed.updatedItem);
+      // Record agent response in discussion thread
+      if (parsed.response || editSummary) {
+        await addDiscussionMessage(
+          repo,
+          prId,
+          feedbackId,
+          'agent',
+          parsed.response || 'Updated the feedback item based on the discussion.',
+          editSummary ? { editSummary } : {}
+        );
       }
 
       // Clean up response file

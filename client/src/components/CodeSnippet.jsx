@@ -12,6 +12,7 @@ import refractor from 'refractor';
 
 const INITIAL_CONTEXT = 5;
 const EXPAND_STEP = 10;
+const diffCache = new Map();
 
 function splitLines(text = '') {
   const normalized = text.replace(/\r\n/g, '\n');
@@ -105,6 +106,11 @@ function buildFallbackHunks(lines, start, end) {
   return hunk ? [hunk] : [];
 }
 
+function getRequestCacheKey(repo, prId, file, commitSha, showFullFile, expandUp, expandDown) {
+  const context = showFullFile ? 'full' : String(Math.max(expandUp, expandDown));
+  return [repo, prId, file, commitSha || '', context].join('::');
+}
+
 export default function CodeSnippet({ repo, prId, file, startLine, endLine, commitSha }) {
   const [diffData, setDiffData] = useState(null);
   const [showFullFile, setShowFullFile] = useState(false);
@@ -120,10 +126,23 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
     setExpandDown(INITIAL_CONTEXT);
   }, [repo, prId, file, commitSha]);
 
+  const cacheKey = useMemo(
+    () => getRequestCacheKey(repo, prId, file, commitSha, showFullFile, expandUp, expandDown),
+    [repo, prId, file, commitSha, showFullFile, expandUp, expandDown]
+  );
+
   useEffect(() => {
     let cancelled = false;
 
     async function loadDiff() {
+      const cached = diffCache.get(cacheKey);
+      if (cached) {
+        setDiffData(cached);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
 
@@ -136,6 +155,7 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
         const data = response.ok ? await readJsonIfPossible(response) : null;
 
         if (data) {
+          diffCache.set(cacheKey, data);
           if (!cancelled) {
             setDiffData(data);
           }
@@ -148,15 +168,16 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
         }
 
         const fileText = await fileResponse.text();
+        const fallbackData = {
+          path: file,
+          oldSource: fileText,
+          newSource: fileText,
+          diffText: '',
+          baseUnavailable: true,
+          fallbackReason: 'Inline diff is unavailable until the server is restarted. Showing file contents instead.',
+        };
         if (!cancelled) {
-          setDiffData({
-            path: file,
-            oldSource: fileText,
-            newSource: fileText,
-            diffText: '',
-            baseUnavailable: true,
-            fallbackReason: 'Inline diff is unavailable until the server is restarted. Showing file contents instead.',
-          });
+          setDiffData(fallbackData);
         }
       } catch (err) {
         if (!cancelled) {
@@ -175,7 +196,7 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
     return () => {
       cancelled = true;
     };
-  }, [repo, prId, file, commitSha, showFullFile, expandUp, expandDown]);
+  }, [repo, prId, file, commitSha, showFullFile, expandUp, expandDown, cacheKey]);
 
   const targetStart = startLine || 1;
   const targetEnd = endLine || startLine || targetStart;

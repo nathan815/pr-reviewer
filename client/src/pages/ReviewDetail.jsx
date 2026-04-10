@@ -5,7 +5,7 @@ import FeedbackCard from '../components/FeedbackCard';
 import RiskBadge from '../components/RiskBadge';
 import AgentStatusPanel from '../components/AgentStatusPanel';
 import ChangedFiles from '../components/ChangedFiles';
-import { IconCheck, IconX, IconSend, IconTrash } from '../components/Icons';
+import { IconArrowDown, IconArrowUp, IconCheck, IconX, IconSend, IconTrash } from '../components/Icons';
 
 export default function ReviewDetail() {
   const { repo, prId } = useParams();
@@ -24,7 +24,20 @@ export default function ReviewDetail() {
   const [lockInfo, setLockInfo] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const feedbackRefs = useRef({});
+  const [toolbarIsSticky, setToolbarIsSticky] = useState(false);
+  const [currentFeedbackIndex, setCurrentFeedbackIndex] = useState(0);
+  const summaryRef = useRef(null);
+  const riskRef = useRef(null);
+  const changedFilesRef = useRef(null);
+  const feedbackSectionRef = useRef(null);
+  const toolbarRef = useRef(null);
+  const items = review?.feedback?.items || [];
+  const filtered = items.filter(i => {
+    if (activeFile && i.file !== activeFile) return false;
+    if (filter !== 'all' && i.status !== filter) return false;
+    return true;
+  });
+  const itemNumbers = new Map(items.map((item, index) => [item.id, index + 1]));
 
   const loadReview = useCallback(() => {
     fetch(`/api/reviews/${repo}/${prId}`)
@@ -74,6 +87,55 @@ export default function ReviewDetail() {
       }, 200);
     }
   }, [highlightId, review]);
+
+  useEffect(() => {
+    const updateStickyState = () => {
+      const top = toolbarRef.current?.getBoundingClientRect().top;
+      setToolbarIsSticky(typeof top === 'number' && top <= 0);
+    };
+
+    updateStickyState();
+    window.addEventListener('scroll', updateStickyState, { passive: true });
+    window.addEventListener('resize', updateStickyState);
+    return () => {
+      window.removeEventListener('scroll', updateStickyState);
+      window.removeEventListener('resize', updateStickyState);
+    };
+  }, []);
+
+  useEffect(() => {
+    const updateCurrentFeedbackIndex = () => {
+      const elements = filtered
+        .map(item => document.getElementById(`feedback-${item.id}`))
+        .filter(Boolean);
+
+      if (!elements.length) {
+        setCurrentFeedbackIndex(0);
+        return;
+      }
+
+      const toolbarHeight = toolbarRef.current?.offsetHeight || 0;
+      const anchorY = window.scrollY + toolbarHeight + 24;
+      let index = elements.findIndex((element, i) => {
+        const nextTop = elements[i + 1]?.offsetTop ?? Number.POSITIVE_INFINITY;
+        return element.offsetTop <= anchorY && nextTop > anchorY;
+      });
+
+      if (index === -1) {
+        index = anchorY < elements[0].offsetTop ? 0 : elements.length - 1;
+      }
+
+      setCurrentFeedbackIndex(index);
+    };
+
+    updateCurrentFeedbackIndex();
+    window.addEventListener('scroll', updateCurrentFeedbackIndex, { passive: true });
+    window.addEventListener('resize', updateCurrentFeedbackIndex);
+    return () => {
+      window.removeEventListener('scroll', updateCurrentFeedbackIndex);
+      window.removeEventListener('resize', updateCurrentFeedbackIndex);
+    };
+  }, [filtered]);
 
   const updateStatus= async (feedbackId, status, userNote) => {
     await fetch(`/api/reviews/${repo}/${prId}/feedback/${feedbackId}`, {
@@ -126,6 +188,9 @@ export default function ReviewDetail() {
       .filter(i => i.status === 'pending')
       .map(i => i.id);
     if (pendingIds.length === 0) return;
+    if (!window.confirm(`Accept all ${pendingIds.length} pending feedback item${pendingIds.length === 1 ? '' : 's'}?`)) {
+      return;
+    }
     await fetch(`/api/reviews/${repo}/${prId}/feedback/batch-update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -174,13 +239,10 @@ export default function ReviewDetail() {
   const { metadata, feedback, risk, overview } = review;
   const isFailed = metadata.status === 'agent_review_failed';
   const isRequested = metadata.status === 'agent_review_requested';
-  const items = feedback.items || [];
-  const filtered = items.filter(i => {
-    if (activeFile && i.file !== activeFile) return false;
-    if (filter !== 'all' && i.status !== filter) return false;
-    return true;
-  });
   const acceptedCount = items.filter(i => i.status === 'accepted').length;
+  const pendingCount = items.filter(i => i.status === 'pending').length;
+  const canGoPrevious = filtered.length > 0 && currentFeedbackIndex > 0;
+  const canGoNext = filtered.length > 0 && currentFeedbackIndex < filtered.length - 1;
 
   const handleFileClick = (filePath) => {
     if (activeFile === filePath) {
@@ -188,6 +250,38 @@ export default function ReviewDetail() {
     } else {
       setActiveFile(filePath);
     }
+  };
+
+  const scrollToChangedFiles = () => {
+    changedFilesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const scrollToSection = (ref) => {
+    if (!ref.current) return;
+    window.scrollTo({
+      top: Math.max(0, ref.current.offsetTop - 12),
+      behavior: 'smooth',
+    });
+  };
+
+  const scrollToFeedback = (direction) => {
+    const elements = filtered
+      .map(item => document.getElementById(`feedback-${item.id}`))
+      .filter(Boolean);
+
+    if (!elements.length) return;
+
+    const toolbarHeight = toolbarRef.current?.offsetHeight || 0;
+    const targetIndex = direction > 0
+      ? Math.min(elements.length - 1, currentFeedbackIndex + 1)
+      : Math.max(0, currentFeedbackIndex - 1);
+    const element = elements[targetIndex];
+    setCurrentFeedbackIndex(targetIndex);
+
+    window.scrollTo({
+      top: Math.max(0, element.offsetTop - toolbarHeight - 12),
+      behavior: 'smooth',
+    });
   };
 
   return (
@@ -254,6 +348,24 @@ export default function ReviewDetail() {
             <RiskBadge level={risk.overallRisk} />
           </div>
         </div>
+        <div className="review-jump-links">
+          {overview && (
+            <button className="btn btn-sm" onClick={() => scrollToSection(summaryRef)}>
+              AI Summary
+            </button>
+          )}
+          {risk.areas?.length > 0 && (
+            <button className="btn btn-sm" onClick={() => scrollToSection(riskRef)}>
+              Risk Areas
+            </button>
+          )}
+          <button className="btn btn-sm" onClick={() => scrollToSection(changedFilesRef)}>
+            Changed Files
+          </button>
+          <button className="btn btn-sm" onClick={() => scrollToSection(feedbackSectionRef)}>
+            Feedback
+          </button>
+        </div>
         {showRelaunchPrompt && (
           <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
             <textarea
@@ -298,15 +410,15 @@ export default function ReviewDetail() {
 
       {/* Overview */}
       {overview && (
-        <div className="overview-section">
-          <h2>Overview</h2>
+        <div className="overview-section" ref={summaryRef}>
+          <h2>AI Summary</h2>
           <div className="markdown-body"><Markdown>{overview}</Markdown></div>
         </div>
       )}
 
       {/* Risk Assessment */}
       {risk.areas?.length > 0 && (
-        <div className="overview-section">
+        <div className="overview-section" ref={riskRef}>
           <h2>Risk Areas</h2>
           <div className="risk-grid">
             {risk.areas.map((a, i) => (
@@ -323,41 +435,74 @@ export default function ReviewDetail() {
       )}
 
       {/* Changed Files */}
-      <ChangedFiles
-        files={metadata.changedFiles || [...new Set(items.map(i => i.file).filter(Boolean))]}
-        feedbackItems={items}
-        activeFile={activeFile}
-        onFileClick={handleFileClick}
-      />
+      <div ref={changedFilesRef}>
+        <ChangedFiles
+          files={metadata.changedFiles || [...new Set(items.map(i => i.file).filter(Boolean))]}
+          feedbackItems={items}
+          activeFile={activeFile}
+          onFileClick={handleFileClick}
+        />
+      </div>
 
       {/* Feedback Section */}
-      <div className="overview-section" style={{ background: 'transparent', border: 'none', padding: '0' }}>
-        <div className="toolbar">
-          <h2 style={{ margin: 0 }}>
-            {activeFile
-              ? <>Feedback for <code style={{ fontSize: 14, color: 'var(--accent)' }}>{activeFile}</code> <button className="btn btn-sm" onClick={() => setActiveFile(null)} style={{ marginLeft: 8 }}>✕ Clear filter</button></>
-              : `Feedback (${items.length})`
-            }
-          </h2>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn" onClick={acceptAll} disabled={!items.some(i => i.status === 'pending')}>
-              <IconCheck /> Accept All Pending
+      <div className="overview-section" style={{ background: 'transparent', border: 'none', padding: '0' }} ref={feedbackSectionRef}>
+        <div className={`review-feedback-toolbar ${toolbarIsSticky ? 'is-sticky' : ''}`} ref={toolbarRef}>
+          <div className="toolbar">
+            <h2 style={{ margin: 0 }}>Feedback ({items.length})</h2>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-sm" onClick={() => scrollToFeedback(-1)} disabled={!canGoPrevious}>
+                <IconArrowUp /> Previous
+              </button>
+              <button className="btn btn-sm" onClick={() => scrollToFeedback(1)} disabled={!canGoNext}>
+                <IconArrowDown /> Next
+              </button>
+              <button className="btn" onClick={acceptAll} disabled={pendingCount === 0}>
+                <IconCheck /> Accept All Pending
+              </button>
+              <button
+                className="btn btn-post"
+                onClick={postAllAccepted}
+                disabled={posting || acceptedCount === 0}
+              >
+                {posting ? 'Posting...' : <><IconSend /> Post {acceptedCount} Accepted to ADO</>}
+              </button>
+              <button
+                className="btn btn-reject"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={items.length === 0}
+                title="Delete all feedback"
+              >
+                <IconTrash />
+              </button>
+            </div>
+          </div>
+
+          <div className="review-file-filter-row">
+            <span className="review-file-filter-label">File Filter:</span>
+            <button className="review-file-filter-button" onClick={scrollToChangedFiles}>
+              {activeFile ? <code>{activeFile}</code> : <span className="review-file-filter-link-text">All files</span>}
             </button>
-            <button
-              className="btn btn-post"
-              onClick={postAllAccepted}
-              disabled={posting || acceptedCount === 0}
-            >
-              {posting ? 'Posting...' : <><IconSend /> Post {acceptedCount} Accepted to ADO</>}
-            </button>
-            <button
-              className="btn btn-reject"
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={items.length === 0}
-              title="Delete all feedback"
-            >
-              <IconTrash />
-            </button>
+            {activeFile && (
+              <button className="btn btn-sm" onClick={() => setActiveFile(null)}>
+                Clear file filter
+              </button>
+            )}
+          </div>
+
+          <div className="filter-bar">
+            {['all', 'pending', 'accepted', 'noted', 'rejected', 'posted'].map(f => {
+              const scope = activeFile ? items.filter(i => i.file === activeFile) : items;
+              const count = f === 'all' ? scope.length : scope.filter(i => i.status === f).length;
+              return (
+                <button
+                  key={f}
+                  className={`filter-btn ${filter === f ? 'active' : ''}`}
+                  onClick={() => setFilter(f)}
+                >
+                  {f.charAt(0).toUpperCase() + f.slice(1)} ({count})
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -389,22 +534,6 @@ export default function ReviewDetail() {
           </div>
         )}
 
-        <div className="filter-bar">
-          {['all', 'pending', 'accepted', 'noted', 'rejected', 'posted'].map(f => {
-            const scope = activeFile ? items.filter(i => i.file === activeFile) : items;
-            const count = f === 'all' ? scope.length : scope.filter(i => i.status === f).length;
-            return (
-              <button
-                key={f}
-                className={`filter-btn ${filter === f ? 'active' : ''}`}
-                onClick={() => setFilter(f)}
-              >
-                {f.charAt(0).toUpperCase() + f.slice(1)} ({count})
-              </button>
-            );
-          })}
-        </div>
-
         {filtered.length === 0 ? (
           <div className="empty-state">No feedback items match this filter</div>
         ) : (
@@ -412,6 +541,7 @@ export default function ReviewDetail() {
             <FeedbackCard
               key={item.id}
               item={item}
+              itemNumber={itemNumbers.get(item.id)}
               repo={repo}
               prId={prId}
               onAccept={(note) => updateStatus(item.id, 'accepted', note)}

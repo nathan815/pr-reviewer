@@ -14,7 +14,24 @@ const CATEGORY_ICONS = {
   documentation: <IconDocs />,
 };
 
-export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onReject, onReset, onPost, onItemUpdated }) {
+const EDIT_FIELD_LABELS = {
+  title: 'title',
+  comment: 'comment',
+  suggestion: 'suggestion',
+  severity: 'severity',
+  category: 'category',
+  startLine: 'start line',
+  endLine: 'end line',
+  file: 'file',
+};
+
+function formatEditSummary(editSummary) {
+  const labels = (editSummary?.changes || []).map(change => EDIT_FIELD_LABELS[change.field] || change.field);
+  if (labels.length === 0) return null;
+  return labels.map(label => `updated ${label}`);
+}
+
+export default function FeedbackCard({ item, itemNumber, repo, prId, onAccept, onNote, onReject, onReset, onPost, onItemUpdated }) {
   const [postingThis, setPostingThis] = useState(false);
   const [error, setError] = useState(null);
   const [noteText, setNoteText] = useState('');
@@ -105,6 +122,7 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
     <div id={`feedback-${item.id}`} className={`feedback-card severity-${item.severity}`}>
       <div className="feedback-header">
         <div className="feedback-header-left">
+          <span className="feedback-number-badge">#{itemNumber}</span>
           <span>{icon}</span>
           {item.file && <span className="feedback-file">{item.file}</span>}
           {item.startLine && (
@@ -194,19 +212,21 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
       {showDiscussion && (
         <div style={{ margin: '0 16px 8px', borderTop: '1px solid var(--border)', paddingTop: 8 }}>
           {discussion.map((msg, i) => (
-            <div key={i} style={{
-              marginBottom: 8,
-              padding: '8px 10px',
-              borderRadius: 6,
-              fontSize: 13,
-              lineHeight: 1.5,
-              background: msg.role === 'user' ? 'rgba(88,166,255,0.08)' : 'rgba(63,185,80,0.08)',
-              borderLeft: `3px solid ${msg.role === 'user' ? 'var(--accent)' : 'var(--green)'}`,
-            }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+            <div key={i} className={`discussion-message discussion-message-${msg.role}`}>
+              <div className="discussion-message-meta">
                 {msg.role === 'user' ? 'You' : 'Agent'} · {new Date(msg.timestamp).toLocaleTimeString()}
               </div>
               <div className="feedback-comment" style={{ fontSize: 13 }}><Markdown>{msg.message}</Markdown></div>
+              {msg.role === 'agent' && formatEditSummary(msg.editSummary) && (
+                <div className="discussion-edit-summary">
+                  <div className="discussion-edit-summary-label">Changes made</div>
+                  <div className="discussion-edit-summary-items">
+                    {formatEditSummary(msg.editSummary).map(change => (
+                      <span key={change} className="discussion-edit-chip">{change}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           {discussing && (
