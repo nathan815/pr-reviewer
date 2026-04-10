@@ -5,6 +5,7 @@ import os from 'os';
 import {
   listAllReviews,
   getReview,
+  getFeedbackItem,
   updateFeedbackStatus,
   batchUpdateFeedbackStatus,
   deleteAllFeedback,
@@ -12,6 +13,7 @@ import {
   getFileDiff,
   getExamplesSinceCuration,
   updateMetadata,
+  syncAdoReplies,
 } from '../lib/fileStore.js';
 import { getPRDetails } from '../lib/adoClient.js';
 import { launchCurationAgent, getCurationStatus, launchDiscussionAgent, getDiscussionStatus } from '../lib/agentLauncher.js';
@@ -34,6 +36,7 @@ reviewsRouter.get('/', async (_req, res) => {
 // Get a single review
 reviewsRouter.get('/:repo/:prId', async (req, res) => {
   try {
+    await syncAdoReplies(req.params.repo, req.params.prId).catch(() => {});
     const review = await getReview(req.params.repo, req.params.prId);
     res.json(review);
   } catch (err) {
@@ -195,4 +198,22 @@ reviewsRouter.post('/:repo/:prId/feedback/:feedbackId/discuss', async (req, res)
 reviewsRouter.get('/:repo/:prId/feedback/:feedbackId/discuss', async (req, res) => {
   const status = getDiscussionStatus(req.params.repo, req.params.prId, req.params.feedbackId);
   res.json(status || { status: 'idle' });
+});
+
+// Get the synced ADO thread replies for a feedback item
+reviewsRouter.get('/:repo/:prId/feedback/:feedbackId/ado-thread', async (req, res) => {
+  try {
+    const { repo, prId, feedbackId } = req.params;
+    await syncAdoReplies(repo, prId, feedbackId).catch(() => {});
+    const item = await getFeedbackItem(repo, prId, feedbackId);
+    res.json({
+      feedbackId: item.id,
+      adoThreadId: item.adoThreadId || null,
+      status: item.status,
+      replies: item.adoReplies || [],
+    });
+  } catch (err) {
+    if (err.message?.includes('not found')) return res.status(404).json({ error: err.message });
+    res.status(500).json({ error: err.message });
+  }
 });

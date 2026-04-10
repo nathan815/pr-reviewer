@@ -798,21 +798,36 @@ export async function launchCurationAgent() {
   const repos = [...new Set(allExamples.map(e => e.repo))];
 
   // Build the curation prompt
-  const formatExample = e =>
-    `[${e.decision.toUpperCase()}] (${e.category}/${e.severity}) [${e.repo}] "${e.title}" — ${e.comment}${e.userNote ? `\n  User note: ${e.userNote}` : ''}`;
+  const formatExample = e => {
+    const exampleType = e.exampleType || 'decision';
+    if (exampleType === 'discussion-edit') {
+      const changedFields = (e.editSummary?.changes || []).map(change => change.field).join(', ');
+      const discussionTail = (e.discussion || [])
+        .slice(-4)
+        .map(message => `${message.role.toUpperCase()}: ${message.message}`)
+        .join('\n  ');
+      return `[DISCUSSION_EDIT] (${e.category}/${e.severity}) [${e.repo}] "${e.title}" — revised after discussion${changedFields ? `\n  Updated fields: ${changedFields}` : ''}${discussionTail ? `\n  Discussion:\n  ${discussionTail}` : ''}`;
+    }
+    if (exampleType === 'ado-reply') {
+      return `[ADO_REPLY] (${e.category}/${e.severity}) [${e.repo}] "${e.title}"\n  Reply from ${e.adoReply?.author || 'Unknown'}: ${e.adoReply?.content || ''}`;
+    }
+    return `[${e.decision.toUpperCase()}] (${e.category}/${e.severity}) [${e.repo}] "${e.title}" — ${e.comment}${e.userNote ? `\n  User note: ${e.userNote}` : ''}`;
+  };
 
   const statsBlock = [
-    `Total examples: ${allExamples.length} (${allExamples.filter(e=>e.decision==='accepted').length} accepted, ${allExamples.filter(e=>e.decision==='noted').length} noted, ${allExamples.filter(e=>e.decision==='rejected').length} rejected)`,
+    `Total signals: ${allExamples.length} (${allExamples.filter(e=>(e.exampleType || 'decision')==='decision' && e.decision==='accepted').length} accepted, ${allExamples.filter(e=>(e.exampleType || 'decision')==='decision' && e.decision==='noted').length} noted, ${allExamples.filter(e=>(e.exampleType || 'decision')==='decision' && e.decision==='rejected').length} rejected, ${allExamples.filter(e=>e.exampleType==='discussion-edit').length} discussion edits, ${allExamples.filter(e=>e.exampleType==='ado-reply').length} ADO replies)`,
     `Repos: ${repos.join(', ')}`,
   ].join('\n');
 
-  let prompt = `You are a reviewer guidelines curator. Your job is to maintain two levels of reviewer guidelines based on the user's accept/reject/note decisions on PR review comments:\n\n`;
+  let prompt = `You are a reviewer guidelines curator. Your job is to maintain two levels of reviewer guidelines based on the user's accept/reject/note decisions on PR review comments, plus follow-up discussion edits and ADO replies:\n\n`;
   prompt += `1. **Global guidelines** at ~/pr-reviews/.learnings/guidelines.md — rules that apply across all repos\n`;
   prompt += `2. **Per-repo guidelines** at ~/pr-reviews/.learnings/repo/{repoName}/guidelines.md — rules specific to a codebase\n\n`;
   prompt += `Decision types:\n`;
   prompt += `- **ACCEPTED** — the user wants this kind of comment posted to ADO\n`;
   prompt += `- **NOTED** — the user found this informational/useful for themselves, but does NOT want it posted to ADO. Future reviews should still generate these but auto-categorize them as notes.\n`;
-  prompt += `- **REJECTED** — the user did not find this comment useful\n\n`;
+  prompt += `- **REJECTED** — the user did not find this comment useful\n`;
+  prompt += `- **DISCUSSION_EDIT** — after reviewer discussion, the feedback was revised. Use these to learn better wording, scope, and line targeting.\n`;
+  prompt += `- **ADO_REPLY** — someone replied after the curated comment was posted to ADO. Use these as downstream signal about whether the posted comment was clear, correct, and useful.\n\n`;
   prompt += `${statsBlock}\n\n`;
 
   // Include existing guidelines

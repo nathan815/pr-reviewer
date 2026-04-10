@@ -64,6 +64,10 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAc
   const [discussing, setDiscussing] = useState(false);
   const [discussionStatus, setDiscussionStatus] = useState(null);
   const [showEditHistory, setShowEditHistory] = useState(false);
+  const [showAdoThread, setShowAdoThread] = useState(false);
+  const [adoThreadLoading, setAdoThreadLoading] = useState(false);
+  const [adoThreadError, setAdoThreadError] = useState(null);
+  const [adoReplies, setAdoReplies] = useState(item.adoReplies || []);
 
   const icon = CATEGORY_ICONS[item.category] || <IconComment />;
   const isActionable = item.status === 'pending';
@@ -73,6 +77,11 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAc
   const isRejected = item.status === 'rejected';
   const discussion = item.discussion || [];
   const fileUrl = buildAdoFileUrl(prUrl, item.file, item.startLine, item.endLine);
+
+  useEffect(() => {
+    setAdoReplies(item.adoReplies || []);
+    setAdoThreadError(null);
+  }, [item.id, item.adoReplies]);
 
   // Check if a discussion agent is already running on mount
   useEffect(() => {
@@ -139,6 +148,25 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAc
       setError(err.message);
     } finally {
       setPostingThis(false);
+    }
+  };
+
+  const handleToggleAdoThread = async () => {
+    const nextOpen = !showAdoThread;
+    setShowAdoThread(nextOpen);
+    if (!nextOpen || !item.adoThreadId || adoThreadLoading) return;
+
+    setAdoThreadLoading(true);
+    setAdoThreadError(null);
+    try {
+      const res = await fetch(`/api/reviews/${repo}/${prId}/feedback/${item.id}/ado-thread`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load ADO thread');
+      setAdoReplies(data.replies || []);
+    } catch (err) {
+      setAdoThreadError(err.message);
+    } finally {
+      setAdoThreadLoading(false);
     }
   };
 
@@ -238,19 +266,27 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAc
         </div>
       )}
 
-      {/* Discussion thread */}
-      <div style={{ padding: '0 16px 4px' }}>
+      <div className="feedback-thread-toggles">
         <button
           className="btn btn-sm"
           onClick={() => setShowDiscussion(!showDiscussion)}
           style={{ color: 'var(--text-muted)', fontSize: 11 }}
         >
-          {showDiscussion ? '▼' : '▶'} Discuss{discussion.length > 0 ? ` (${discussion.length})` : ''}
+          {showDiscussion ? '▼' : '▶'} Discuss with Agent{discussion.length > 0 ? ` (${discussion.length})` : ''}
         </button>
+        {item.adoThreadId && (
+          <button
+            className="btn btn-sm"
+            onClick={handleToggleAdoThread}
+            style={{ color: 'var(--text-muted)', fontSize: 11 }}
+          >
+            {showAdoThread ? '▼' : '▶'} ADO Thread{adoReplies.length > 0 ? ` (${adoReplies.length})` : ''}
+          </button>
+        )}
       </div>
 
       {showDiscussion && (
-        <div style={{ margin: '0 16px 8px', borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+        <div className="feedback-thread-panel">
           {discussion.map((msg, i) => (
             <div key={i} className={`discussion-message discussion-message-${msg.role}`}>
               <div className="discussion-message-meta">
@@ -279,7 +315,7 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAc
               type="text"
               className="feedback-note-input"
               style={{ flex: 1 }}
-              placeholder="Ask about this feedback..."
+              placeholder="Suggest edits or ask about this feedback"
               value={discussionInput}
               onChange={e => setDiscussionInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !discussing) handleAsk(); }}
@@ -293,6 +329,32 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAc
               Ask
             </button>
           </div>
+        </div>
+      )}
+
+      {showAdoThread && item.adoThreadId && (
+        <div className="feedback-thread-panel">
+          {adoThreadLoading && (
+            <div className="thread-inline-status">
+              <span className="discuss-spinner" /> Loading ADO thread...
+            </div>
+          )}
+          {adoThreadError && (
+            <div className="thread-inline-error">{adoThreadError}</div>
+          )}
+          {!adoThreadLoading && !adoThreadError && adoReplies.length === 0 && (
+            <div className="ado-thread-empty">No replies yet on this ADO thread.</div>
+          )}
+          {adoReplies.map(reply => (
+            <div key={reply.commentId} className="ado-thread-message">
+              <div className="discussion-message-meta">
+                {reply.author} · {new Date(reply.timestamp).toLocaleString()}
+              </div>
+              <div className="feedback-comment" style={{ fontSize: 13 }}>
+                <Markdown>{reply.content}</Markdown>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

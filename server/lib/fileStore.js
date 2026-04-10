@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import { execFileSync } from 'child_process';
 import path from 'path';
 import os from 'os';
+import { getPRThreadComments } from './adoClient.js';
 
 const REVIEWS_ROOT = path.join(os.homedir(), 'pr-reviews');
 const LEARNINGS_DIR = path.join(REVIEWS_ROOT, '.learnings');
@@ -194,6 +195,16 @@ export async function getReview(repo, prId) {
   return { repo, prId: Number(prId), metadata, feedback: { items: feedbackResult.items }, risk, overview };
 }
 
+/** Get a single feedback item */
+export async function getFeedbackItem(repo, prId, feedbackId) {
+  const dir = reviewDir(repo, prId);
+  const filePath = await findFeedbackFile(dir, feedbackId);
+  const feedback = await readJson(filePath);
+  const item = feedback.items.find(i => i.id === feedbackId);
+  if (!item) throw new Error(`Feedback item ${feedbackId} not found`);
+  return item;
+}
+
 /** Update the status of a single feedback item */
 export async function updateFeedbackStatus(repo, prId, feedbackId, newStatus, userNote) {
   const dir = reviewDir(repo, prId);
@@ -204,7 +215,14 @@ export async function updateFeedbackStatus(repo, prId, feedbackId, newStatus, us
 
   // Record learning example on accept/noted/reject
   if (newStatus === 'accepted' || newStatus === 'noted' || newStatus === 'rejected') {
-    await recordLearningExample(repo, prId, item, newStatus, userNote);
+    await recordLearningExample({
+      repo,
+      prId,
+      item,
+      exampleType: 'decision',
+      decision: newStatus,
+      userNote,
+    });
   }
 
   // Remove learning example on reset to pending
@@ -382,7 +400,7 @@ export async function updateFeedbackContent(repo, prId, feedbackId, updates) {
   const dir = reviewDir(repo, prId);
   const filePath = await findFeedbackFile(dir, feedbackId);
 
-  return withFileLock(filePath, async () => {
+  const result = await withFileLock(filePath, async () => {
     const feedback = await readJson(filePath);
     const item = feedback.items.find(i => i.id === feedbackId);
     if (!item) throw new Error(`Feedback item ${feedbackId} not found`);
@@ -420,6 +438,20 @@ export async function updateFeedbackContent(repo, prId, feedbackId, updates) {
     await writeJson(filePath, feedback);
     return { item, editSummary };
   });
+
+  if (result.editSummary) {
+    await recordLearningExample({
+      repo,
+      prId,
+      item: result.item,
+      exampleType: 'discussion-edit',
+      discussion: result.item.discussion || [],
+      editSummary: result.editSummary,
+      feedbackStatus: result.item.status,
+    });
+  }
+
+  return result;
 }
 
 // Helpers
@@ -434,15 +466,11 @@ async function writeJson(filePath, data) {
 
 // --- Learnings ---
 
-/** Append a learning example when user accepts/rejects feedback */
-async function recordLearningExample(repo, prId, item, decision, userNote) {
-  await ensureDir(LEARNINGS_DIR);
-  const example = {
+function buildLearningBase(repo, prId, item) {
+  return {
     timestamp: new Date().toISOString(),
     repo,
     prId,
-    decision,
-    userNote: userNote || null,
     feedbackId: item.id,
     category: item.category,
     severity: item.severity,
@@ -452,6 +480,34 @@ async function recordLearningExample(repo, prId, item, decision, userNote) {
     file: item.file,
     startLine: item.startLine,
     endLine: item.endLine,
+  };
+}
+
+/** Append a learning example */
+async function recordLearningExample({
+  repo,
+  prId,
+  item,
+  exampleType = 'decision',
+  decision = null,
+  userNote = null,
+  discussion = null,
+  editSummary = null,
+  feedbackStatus = null,
+  adoThreadId = null,
+  adoReply = null,
+}) {
+  await ensureDir(LEARNINGS_DIR);
+  const example = {
+    ...buildLearningBase(repo, prId, item),
+    exampleType,
+    decision,
+    userNote: userNote || null,
+    feedbackStatus: feedbackStatus || item.status || null,
+    discussion: discussion || null,
+    editSummary: editSummary || null,
+    adoThreadId,
+    adoReply: adoReply || null,
   };
   await fs.appendFile(EXAMPLES_PATH, JSON.stringify(example) + '\n', 'utf-8');
 }
@@ -484,11 +540,14 @@ export async function getLearningExamples() {
 /** Get learning stats summary */
 export async function getLearningStats() {
   const examples = await getLearningExamples();
-  const accepted = examples.filter(e => e.decision === 'accepted' || e.decision === 'noted');
-  const rejected = examples.filter(e => e.decision === 'rejected');
+  const decisionExamples = examples.filter(e => (e.exampleType || 'decision') === 'decision');
+  const discussionEdits = examples.filter(e => e.exampleType === 'discussion-edit');
+  const adoReplies = examples.filter(e => e.exampleType === 'ado-reply');
+  const accepted = decisionExamples.filter(e => e.decision === 'accepted' || e.decision === 'noted');
+  const rejected = decisionExamples.filter(e => e.decision === 'rejected');
 
   const byCat = {};
-  for (const ex of examples) {
+  for (const ex of decisionExamples) {
     if (!byCat[ex.category]) byCat[ex.category] = { accepted: 0, noted: 0, rejected: 0 };
     if (ex.decision === 'accepted' || ex.decision === 'noted') byCat[ex.category].accepted++;
     if (ex.decision === 'noted') byCat[ex.category].noted++;
@@ -497,13 +556,85 @@ export async function getLearningStats() {
 
   return {
     total: examples.length,
+    decisionTotal: decisionExamples.length,
+    discussionEdits: discussionEdits.length,
+    adoReplies: adoReplies.length,
     accepted: accepted.length,
-    noted: examples.filter(e => e.decision === 'noted').length,
+    noted: decisionExamples.filter(e => e.decision === 'noted').length,
     rejected: rejected.length,
-    acceptRate: examples.length ? Math.round(accepted.length / examples.length * 100) : 0,
+    acceptRate: decisionExamples.length ? Math.round(accepted.length / decisionExamples.length * 100) : 0,
     byCategory: byCat,
-    withNotes: examples.filter(e => e.userNote).length,
+    withNotes: decisionExamples.filter(e => e.userNote).length,
   };
+}
+
+function normalizeAdoReply(comment) {
+  return {
+    commentId: comment.id,
+    parentCommentId: comment.parentCommentId,
+    author: comment.author?.displayName || comment.author?.uniqueName || 'Unknown',
+    content: comment.content,
+    timestamp: comment.publishedDate || comment.lastUpdatedDate || new Date().toISOString(),
+    updatedAt: comment.lastUpdatedDate || null,
+  };
+}
+
+export async function syncAdoReplies(repo, prId, feedbackId = null) {
+  const dir = reviewDir(repo, prId);
+  const { items } = await readAllFeedback(dir);
+  const postedItems = items.filter(item => item.adoThreadId && (!feedbackId || item.id === feedbackId));
+  let imported = 0;
+
+  for (const item of postedItems) {
+    let comments;
+    try {
+      comments = await getPRThreadComments(repo, prId, item.adoThreadId);
+    } catch {
+      continue;
+    }
+
+    const replies = comments
+      .filter(comment => comment.parentCommentId && comment.parentCommentId !== 0 && comment.content?.trim())
+      .map(normalizeAdoReply);
+
+    if (replies.length === 0) continue;
+
+    const result = await updateFeedbackItem(dir, item.id, current => {
+      const existingById = new Map((current.adoReplies || []).map(reply => [reply.commentId, reply]));
+      const newReplies = [];
+
+      for (const reply of replies) {
+        if (!existingById.has(reply.commentId)) {
+          newReplies.push(reply);
+        }
+        existingById.set(reply.commentId, reply);
+      }
+
+      current.adoReplies = [...existingById.values()].sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+
+      return {
+        itemSnapshot: { ...current },
+        newReplies,
+      };
+    });
+
+    for (const reply of result.newReplies || []) {
+      imported += 1;
+      await recordLearningExample({
+        repo,
+        prId,
+        item: result.itemSnapshot,
+        exampleType: 'ado-reply',
+        feedbackStatus: result.itemSnapshot.status,
+        adoThreadId: item.adoThreadId,
+        adoReply: reply,
+      });
+    }
+  }
+
+  return { imported };
 }
 
 /** Read the curated guidelines (global, per-repo, or both) */
