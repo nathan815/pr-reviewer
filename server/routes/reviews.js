@@ -36,9 +36,19 @@ reviewsRouter.get('/', async (_req, res) => {
 // Get a single review
 reviewsRouter.get('/:repo/:prId', async (req, res) => {
   try {
-    await syncAdoReplies(req.params.repo, req.params.prId).catch(() => {});
     const review = await getReview(req.params.repo, req.params.prId);
     res.json(review);
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'Review not found' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Sync ADO replies for the whole PR without blocking the main review payload
+reviewsRouter.post('/:repo/:prId/sync-ado-replies', async (req, res) => {
+  try {
+    const result = await syncAdoReplies(req.params.repo, req.params.prId);
+    res.json(result);
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'Review not found' });
     res.status(500).json({ error: err.message });

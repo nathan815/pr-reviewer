@@ -26,6 +26,7 @@ export default function ReviewDetail() {
   const [deleting, setDeleting] = useState(false);
   const [toolbarIsSticky, setToolbarIsSticky] = useState(false);
   const [currentFeedbackIndex, setCurrentFeedbackIndex] = useState(0);
+  const [adoReplySyncStarted, setAdoReplySyncStarted] = useState(false);
   const summaryRef = useRef(null);
   const riskRef = useRef(null);
   const changedFilesRef = useRef(null);
@@ -47,6 +48,30 @@ export default function ReviewDetail() {
   }, [repo, prId]);
 
   useEffect(() => { loadReview(); }, [loadReview]);
+
+  useEffect(() => {
+    setAdoReplySyncStarted(false);
+  }, [repo, prId]);
+
+  useEffect(() => {
+    if (adoReplySyncStarted) return;
+
+    let cancelled = false;
+    setAdoReplySyncStarted(true);
+
+    fetch(`/api/reviews/${repo}/${prId}/sync-ado-replies`, { method: 'POST' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!cancelled && data) {
+          loadReview();
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [adoReplySyncStarted, loadReview, repo, prId]);
 
   useEffect(() => {
     fetch(`/api/reviews/${repo}/${prId}/ado-info`)
