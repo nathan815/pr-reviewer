@@ -471,7 +471,7 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAc
           )}
         </div>
         {(isAccepted || isRejected || isNoted || isPosted) && item.userNote && (
-          <div className="feedback-user-note"><IconNote /> {item.userNote}</div>
+          <div className="feedback-user-note"><IconNote /> <strong>Internal Note to Agent:</strong> {item.userNote}</div>
         )}
         {isAccepted && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

@@ -214,7 +214,7 @@ export async function launchDiscussionAgent(repo, prId, feedbackId, userMessage)
     .map(d => `${d.role}: ${d.message}`)
     .join('\n\n');
 
-  const prompt = `You are a code review discussion assistant. A reviewer has a question about a specific piece of feedback on a pull request.
+  const prompt = `You are a code review assistant helping a reviewer refine their feedback before posting it. The reviewer may ask you to rewrite, shorten, clarify, or adjust the feedback — follow their instructions directly.
 
 ## Feedback Item Under Discussion
 Title: ${item.title}
@@ -234,24 +234,26 @@ ${discussionHistory || '(new discussion)'}
 
 ## Instructions
 1. Read the relevant source code file at the path shown above to understand the context. The worktree is at: ${path.join(REVIEWS_ROOT, repo, String(prId), 'worktree')}
-2. Answer the reviewer's question thoughtfully and concisely.
-3. If after discussion you believe the feedback item should be revised (title, comment, suggestion, severity, or category), include the updates in updatedItem.
+2. Follow the reviewer's request. If they ask you to rewrite, shorten, or adjust the feedback, do it — update the feedback item directly via updatedItem. Write naturally, as if the reviewer wrote it themselves. Don't be verbose or analytical unless asked.
+3. If they ask a question, answer it concisely.
 4. Write your response as JSON to: ${responseFile}
 
 Response JSON format:
 {
-  "response": "Your answer to the reviewer...",
+  "response": "Brief confirmation of what you did, or your answer...",
   "updatedItem": null
 }
 
 If the feedback should be revised, set updatedItem to an object with ONLY the changed fields.
 Editable fields: title, comment, suggestion, severity, category, startLine, endLine, file.
 {
-  "response": "Your answer...",
-  "updatedItem": { "comment": "revised comment...", "startLine": 42, "endLine": 45 }
+  "response": "Shortened and reworded the comment.",
+  "updatedItem": { "comment": "revised comment..." }
 }
 
 CRITICAL RULES:
+- When asked to rewrite/shorten/rephrase, actually do it via updatedItem. Don't just analyze the feedback.
+- Write in the reviewer's voice — direct, concise, first-person. Not analytical or third-person.
 - ONLY write to the response file path above. Do NOT edit feedback.json, overview.md, metadata.json, or any other review files.
 - The server will read your response file and apply any edits to feedback.json on your behalf, tracking edit history.
 - If you edit feedback.json directly, edit history will be lost and the review state may become corrupted.
