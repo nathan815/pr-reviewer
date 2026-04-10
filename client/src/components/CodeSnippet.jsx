@@ -273,7 +273,14 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
     return () => cancelAnimationFrame(frame);
   }, [loading, visibleHunks, targetStart, targetEnd]);
 
-  if (loading) return <div className="code-snippet-loading">Loading diff…</div>;
+  if (loading) {
+    return (
+      <div className="code-snippet-loading">
+        <span className="discuss-spinner code-snippet-loading-spinner" />
+        <span>Loading code diff...</span>
+      </div>
+    );
+  }
   if (error) return <div className="code-snippet-error">⚠ {error}</div>;
   if (!diffData) return null;
 

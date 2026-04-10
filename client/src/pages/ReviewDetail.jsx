@@ -163,11 +163,15 @@ export default function ReviewDetail() {
   }, [filtered]);
 
   const updateStatus= async (feedbackId, status, userNote) => {
-    await fetch(`/api/reviews/${repo}/${prId}/feedback/${feedbackId}`, {
+    const res = await fetch(`/api/reviews/${repo}/${prId}/feedback/${feedbackId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status, ...(userNote ? { userNote } : {}) }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      throw new Error(data?.error || `Failed to update feedback (${res.status})`);
+    }
     loadReview();
   };
 

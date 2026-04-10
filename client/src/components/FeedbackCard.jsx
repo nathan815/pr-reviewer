@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
 import RiskBadge from './RiskBadge';
 import CodeSnippet from './CodeSnippet';
@@ -31,6 +31,24 @@ function formatEditSummary(editSummary) {
   return labels.map(label => `updated ${label}`);
 }
 
+const DECISION_CONFIG = {
+  accepted: {
+    label: 'Accept',
+    buttonClass: 'btn-accept',
+    icon: <IconCheck />,
+  },
+  noted: {
+    label: 'Accept As Note',
+    buttonClass: 'btn-noted',
+    icon: <IconCheck />,
+  },
+  rejected: {
+    label: 'Reject',
+    buttonClass: 'btn-reject',
+    icon: <IconX />,
+  },
+};
+
 function buildAdoFileUrl(prUrl, filePath, startLine, endLine) {
   if (!prUrl || !filePath) return null;
 
@@ -58,7 +76,8 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAc
   const [postingThis, setPostingThis] = useState(false);
   const [error, setError] = useState(null);
   const [noteText, setNoteText] = useState('');
-  const [showNote, setShowNote] = useState(false);
+  const [selectedDecision, setSelectedDecision] = useState(null);
+  const [submittingDecision, setSubmittingDecision] = useState(false);
   const [showDiscussion, setShowDiscussion] = useState(false);
   const [discussionInput, setDiscussionInput] = useState('');
   const [discussing, setDiscussing] = useState(false);
@@ -68,6 +87,7 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAc
   const [adoThreadLoading, setAdoThreadLoading] = useState(false);
   const [adoThreadError, setAdoThreadError] = useState(null);
   const [adoReplies, setAdoReplies] = useState(item.adoReplies || []);
+  const noteInputRef = useRef(null);
 
   const icon = CATEGORY_ICONS[item.category] || <IconComment />;
   const isActionable = item.status === 'pending';
@@ -77,11 +97,26 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAc
   const isRejected = item.status === 'rejected';
   const discussion = item.discussion || [];
   const fileUrl = buildAdoFileUrl(prUrl, item.file, item.startLine, item.endLine);
+  const persistedDecision = isPosted ? 'accepted' : isAccepted ? 'accepted' : isNoted ? 'noted' : isRejected ? 'rejected' : null;
+  const activeDecision = isActionable ? selectedDecision : persistedDecision;
+  const decisionButtonsDisabled = !isActionable || submittingDecision;
 
   useEffect(() => {
     setAdoReplies(item.adoReplies || []);
     setAdoThreadError(null);
   }, [item.id, item.adoReplies]);
+
+  useEffect(() => {
+    setSelectedDecision(null);
+    setSubmittingDecision(false);
+    setNoteText(item.userNote || '');
+    setError(null);
+  }, [item.id, item.status, item.userNote]);
+
+  useEffect(() => {
+    if (!isActionable || !selectedDecision || submittingDecision) return;
+    noteInputRef.current?.focus();
+  }, [isActionable, selectedDecision, submittingDecision]);
 
   // Check if a discussion agent is already running on mount
   useEffect(() => {
@@ -148,6 +183,28 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAc
       setError(err.message);
     } finally {
       setPostingThis(false);
+    }
+  };
+
+  const handleDecisionSubmit = async () => {
+    if (!selectedDecision) return;
+
+    const submitters = {
+      accepted: onAccept,
+      noted: onNote,
+      rejected: onReject,
+    };
+
+    const submit = submitters[selectedDecision];
+    if (!submit) return;
+
+    setSubmittingDecision(true);
+    setError(null);
+    try {
+      await submit(noteText);
+    } catch (err) {
+      setError(err.message);
+      setSubmittingDecision(false);
     }
   };
 
@@ -359,35 +416,61 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAc
       )}
 
       <div className="feedback-actions">
-        {isActionable && (
-          <>
-            <div className="feedback-note-row">
+        <div className="feedback-decision-section">
+          <div className="feedback-decision-buttons">
+            {Object.entries(DECISION_CONFIG).map(([decision, config]) => (
               <button
-                className="btn btn-sm"
-                onClick={() => setShowNote(!showNote)}
-                style={{ color: 'var(--text-muted)', fontSize: 11 }}
+                key={decision}
+                className={`btn btn-sm ${config.buttonClass} ${activeDecision === decision ? 'is-selected' : ''}`}
+                onClick={() => {
+                  if (!isActionable || submittingDecision) return;
+                  setSelectedDecision(decision);
+                }}
+                disabled={decisionButtonsDisabled}
               >
-                {showNote ? '▼' : '▶'} Add feedback to agent
+                {config.icon} {config.label}
               </button>
-              {showNote && (
-                <input
-                  type="text"
-                  className="feedback-note-input"
-                  placeholder="Why accept/reject? (optional — helps train future reviews)"
-                  value={noteText}
-                  onChange={e => setNoteText(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') onAccept(noteText); }}
-                />
-              )}
+            ))}
+          </div>
+          {isActionable && selectedDecision && (
+            <div className="feedback-decision-form">
+              <input
+                ref={noteInputRef}
+                type="text"
+                className="feedback-note-input"
+                placeholder="Optional feedback about this decision — helps train future reviews"
+                value={noteText}
+                onChange={e => setNoteText(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !submittingDecision) {
+                    handleDecisionSubmit();
+                  }
+                }}
+                disabled={submittingDecision}
+              />
+              <div className="feedback-decision-form-actions">
+                <button
+                  className={`btn btn-sm ${DECISION_CONFIG[selectedDecision].buttonClass}`}
+                  onClick={handleDecisionSubmit}
+                  disabled={submittingDecision}
+                >
+                  {submittingDecision ? <><IconClock /> Submitting...</> : <><IconSend /> Submit {DECISION_CONFIG[selectedDecision].label}</>}
+                </button>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => {
+                    setSelectedDecision(null);
+                    setNoteText('');
+                  }}
+                  disabled={submittingDecision}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-accept btn-sm" onClick={() => onAccept(noteText)}><IconCheck /> Accept</button>
-              <button className="btn btn-noted btn-sm" onClick={() => onNote(noteText)}><IconCheck /> Accept As Note</button>
-              <button className="btn btn-reject btn-sm" onClick={() => onReject(noteText)}><IconX /> Reject</button>
-            </div>
-          </>
-        )}
-        {(isAccepted || isRejected || isNoted) && item.userNote && (
+          )}
+        </div>
+        {(isAccepted || isRejected || isNoted || isPosted) && item.userNote && (
           <div className="feedback-user-note"><IconNote /> {item.userNote}</div>
         )}
         {isAccepted && (

@@ -85,12 +85,12 @@ export default function Dashboard() {
           <div className="stat-label">Pending Review</div>
         </div>
         <div className="stat-box">
-          <div className="stat-value" style={{ color: 'var(--purple)' }}>{totalPosted}</div>
+          <div className="stat-value" style={{ color: 'var(--green)' }}>{totalPosted}</div>
           <div className="stat-label">Posted to ADO</div>
         </div>
       </div>
 
-      <div className="card" style={{ padding: 0 }}>
+      <div className="card dashboard-pr-table-card" style={{ padding: 0 }}>
         <table className="pr-table">
           <thead>
             <tr>

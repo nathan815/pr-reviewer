@@ -4,7 +4,7 @@ const s = { width: 16, height: 16, verticalAlign: 'middle', flexShrink: 0 };
 
 export function IconCheck(props) {
   return (
-    <svg {...s} {...props} viewBox="0 0 16 16" fill="none" stroke="var(--green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg {...s} {...props} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="3.5 8.5 6.5 11.5 12.5 4.5" />
     </svg>
   );
