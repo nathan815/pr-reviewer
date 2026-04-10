@@ -1,4 +1,5 @@
 import fs from 'fs/promises';
+import { execFileSync } from 'child_process';
 import path from 'path';
 import os from 'os';
 
@@ -31,6 +32,57 @@ export async function ensureDir(dir) {
 
 function reviewDir(repo, prId) {
   return path.join(REVIEWS_ROOT, repo, String(prId));
+}
+
+function runGit(worktreePath, args, { allowFailure = false } = {}) {
+  try {
+    return execFileSync('git', args, {
+      cwd: worktreePath,
+      encoding: 'utf-8',
+      maxBuffer: 10 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trimEnd();
+  } catch (error) {
+    if (allowFailure) return null;
+    throw error;
+  }
+}
+
+function normalizeBranchRef(ref) {
+  if (!ref) return null;
+  return ref.replace(/^refs\/heads\//, '');
+}
+
+function resolveHeadRef(worktreePath, commitSha) {
+  return commitSha || runGit(worktreePath, ['rev-parse', 'HEAD'], { allowFailure: true });
+}
+
+function resolveBaseRef(worktreePath, targetBranch, headRef) {
+  if (!targetBranch || !headRef) return null;
+
+  const normalized = normalizeBranchRef(targetBranch);
+  const candidates = [
+    targetBranch,
+    `refs/remotes/origin/${normalized}`,
+    `origin/${normalized}`,
+    `refs/heads/${normalized}`,
+    normalized,
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const resolved = runGit(worktreePath, ['rev-parse', '--verify', candidate], { allowFailure: true });
+    if (!resolved) continue;
+
+    const mergeBase = runGit(worktreePath, ['merge-base', headRef, resolved], { allowFailure: true });
+    if (mergeBase) return mergeBase;
+  }
+
+  return null;
+}
+
+function readGitFile(worktreePath, ref, filePath) {
+  if (!ref) return null;
+  return runGit(worktreePath, ['show', `${ref}:${filePath}`], { allowFailure: true });
 }
 
 // Cache: maps feedbackId -> filePath per PR directory
@@ -249,28 +301,63 @@ export async function updateMetadata(repo, prId, updates) {
 export async function readFileAtCommit(repo, prId, filePath, commitSha) {
   const dir = reviewDir(repo, prId);
   const worktreePath = path.join(dir, 'worktree');
-  const { execFileSync } = await import('child_process');
-
-  // Resolve the ref: explicit commit > HEAD of worktree
-  const ref = commitSha || (() => {
-    try {
-      return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: worktreePath, encoding: 'utf-8' }).trim();
-    } catch { return null; }
-  })();
+  const ref = resolveHeadRef(worktreePath, commitSha);
 
   if (ref) {
-    try {
-      return execFileSync(
-        'git', ['show', `${ref}:${filePath}`],
-        { cwd: worktreePath, encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
-      );
-    } catch {
-      // Fall through to worktree read
-    }
+    const content = readGitFile(worktreePath, ref, filePath);
+    if (content !== null) return content;
   }
 
   // Final fallback: read from worktree on disk
   return fs.readFile(path.join(worktreePath, filePath), 'utf-8');
+}
+
+/** Build diff/source payload for a file in the PR worktree */
+export async function getFileDiff(repo, prId, filePath, commitSha, contextLines = 3) {
+  const dir = reviewDir(repo, prId);
+  const worktreePath = path.join(dir, 'worktree');
+  const metadata = await readJson(path.join(dir, 'metadata.json'));
+
+  const headRef = resolveHeadRef(worktreePath, commitSha || metadata.commitSha);
+  const baseRef = resolveBaseRef(worktreePath, metadata.targetBranch, headRef);
+
+  const oldSourceFromBase = readGitFile(worktreePath, baseRef, filePath) ?? '';
+  let newSource = readGitFile(worktreePath, headRef, filePath);
+  if (newSource === null) {
+    try {
+      newSource = await fs.readFile(path.join(worktreePath, filePath), 'utf-8');
+    } catch {
+      newSource = '';
+    }
+  }
+
+  const oldSource = baseRef ? oldSourceFromBase : newSource;
+  const diffText = baseRef
+    ? runGit(
+        worktreePath,
+        [
+          '--no-pager',
+          'diff',
+          '--no-ext-diff',
+          `--unified=${Math.max(0, Number(contextLines) || 0)}`,
+          baseRef,
+          headRef,
+          '--',
+          filePath,
+        ],
+        { allowFailure: true }
+      ) || ''
+    : '';
+
+  return {
+    path: filePath,
+    headRef,
+    baseRef,
+    oldSource,
+    newSource,
+    diffText,
+    baseUnavailable: !baseRef,
+  };
 }
 
 /** Add a discussion message to a feedback item */

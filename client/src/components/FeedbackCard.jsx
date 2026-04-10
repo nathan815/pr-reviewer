@@ -293,6 +293,9 @@ export default function FeedbackCard({ item, repo, prId, onAccept, onNote, onRej
           </span>
         )}
       </div>
+      <div className="feedback-footer-meta">
+        <span className="feedback-id-meta">{item.id}</span>
+      </div>
     </div>
   );
 }

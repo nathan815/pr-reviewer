@@ -230,6 +230,17 @@ a:hover { text-decoration: underline; }
   padding: 4px 0;
   font-style: italic;
 }
+.feedback-footer-meta {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 16px 12px;
+}
+.feedback-id-meta {
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
 
 /* Code snippet */
 .code-snippet {
@@ -239,7 +250,8 @@ a:hover { text-decoration: underline; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 16px;
+  gap: 12px;
+  padding: 8px 16px;
   background: rgba(0,0,0,0.2);
   border-bottom: 1px solid var(--border);
 }
@@ -248,52 +260,106 @@ a:hover { text-decoration: underline; }
   font-size: 12px;
   color: var(--text-muted);
 }
-.code-snippet-body {
-  font-family: 'Cascadia Code', 'Fira Code', monospace;
+.code-snippet-sha {
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+.code-snippet-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.code-snippet-note {
+  padding: 8px 16px;
   font-size: 12px;
-  line-height: 1.5;
+  color: var(--orange);
+  background: rgba(210, 153, 34, 0.08);
+  border-bottom: 1px solid var(--border);
+}
+.code-snippet-body {
   overflow-x: auto;
   max-height: 500px;
   overflow-y: auto;
+  background: var(--bg);
 }
-.code-line {
-  display: flex;
-  padding: 0 16px;
-  min-height: 20px;
+.code-diff-view {
+  width: 100%;
 }
-.code-line-target {
-  background: rgba(88,166,255,0.08);
-  border-left: 2px solid var(--accent);
-  padding-left: 14px;
+.code-diff-view .diff-gutter,
+.code-diff-view .diff-code {
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 12px;
+  line-height: 1.5;
 }
-.code-line-ellipsis {
+.code-diff-view .diff-gutter {
+  white-space: nowrap;
   color: var(--text-muted);
-  background: rgba(0,0,0,0.1);
 }
-.code-gutter {
-  display: inline-block;
-  text-align: right;
-  color: var(--text-muted);
-  padding-right: 12px;
-  user-select: none;
-  flex-shrink: 0;
-  opacity: 0.6;
+.code-diff-view .diff-code {
+  color: var(--text);
 }
-.code-text {
+.code-diff-view .diff-gutter-insert,
+.code-diff-view .diff-code-insert {
+  background: rgba(63, 185, 80, 0.12);
+}
+.code-diff-view .diff-gutter-delete,
+.code-diff-view .diff-code-delete {
+  background: rgba(248, 81, 73, 0.12);
+}
+.code-diff-view .diff-line:hover .diff-gutter,
+.code-diff-view .diff-line:hover .diff-code {
+  background-color: rgba(88, 166, 255, 0.08);
+}
+.code-diff-view .code-line-target .diff-gutter,
+.code-diff-view .code-line-target .diff-code {
+  background: rgba(88, 166, 255, 0.12);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.code-diff-view .diff-code-content {
   white-space: pre;
-  flex: 1;
 }
-.code-inline-comment {
-  display: flex;
-  gap: 8px;
-  padding: 8px 16px;
-  background: rgba(88,166,255,0.06);
-  border-top: 1px dashed var(--border);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 13px;
-  color: var(--text-muted);
+.code-diff-view .token.comment,
+.code-diff-view .token.prolog,
+.code-diff-view .token.doctype,
+.code-diff-view .token.cdata {
+  color: #8b949e;
 }
-.code-inline-comment-icon { flex-shrink: 0; }
+.code-diff-view .token.punctuation,
+.code-diff-view .token.operator {
+  color: #c9d1d9;
+}
+.code-diff-view .token.property,
+.code-diff-view .token.tag,
+.code-diff-view .token.boolean,
+.code-diff-view .token.number,
+.code-diff-view .token.constant,
+.code-diff-view .token.symbol {
+  color: #79c0ff;
+}
+.code-diff-view .token.selector,
+.code-diff-view .token.attr-name,
+.code-diff-view .token.string,
+.code-diff-view .token.char,
+.code-diff-view .token.builtin {
+  color: #a5d6ff;
+}
+.code-diff-view .token.inserted,
+.code-diff-view .token.function,
+.code-diff-view .token.class-name {
+  color: #7ee787;
+}
+.code-diff-view .token.keyword,
+.code-diff-view .token.atrule {
+  color: #ff7b72;
+}
+.code-diff-view .token.regex,
+.code-diff-view .token.important,
+.code-diff-view .token.variable {
+  color: #ffa657;
+}
+.code-diff-view .token.deleted {
+  color: #ffb3ba;
+}
 .code-snippet-loading, .code-snippet-error {
   padding: 8px 16px;
   font-size: 12px;

@@ -9,6 +9,7 @@ import {
   batchUpdateFeedbackStatus,
   deleteAllFeedback,
   readFileAtCommit,
+  getFileDiff,
   getExamplesSinceCuration,
   updateMetadata,
 } from '../lib/fileStore.js';
@@ -157,6 +158,19 @@ reviewsRouter.get('/:repo/:prId/file', async (req, res) => {
     if (!filePath) return res.status(400).json({ error: 'path query parameter required' });
     const content = await readFileAtCommit(req.params.repo, req.params.prId, filePath, commit);
     res.type('text/plain').send(content);
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'File not found' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Read diff/source payload for a file in the PR
+reviewsRouter.get('/:repo/:prId/file-diff', async (req, res) => {
+  try {
+    const { path: filePath, commit, context } = req.query;
+    if (!filePath) return res.status(400).json({ error: 'path query parameter required' });
+    const diff = await getFileDiff(req.params.repo, req.params.prId, filePath, commit, context);
+    res.json(diff);
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'File not found' });
     res.status(500).json({ error: err.message });
