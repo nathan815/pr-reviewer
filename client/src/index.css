@@ -284,12 +284,38 @@ a:hover { text-decoration: underline; }
 }
 .code-diff-view {
   width: 100%;
+  --diff-background-color: var(--bg);
+  --diff-text-color: var(--text);
+  --diff-selection-background-color: rgba(88, 166, 255, 0.16);
+  --diff-selection-text-color: var(--text);
+  --diff-gutter-insert-background-color: rgba(63, 185, 80, 0.05);
+  --diff-gutter-insert-text-color: var(--text-muted);
+  --diff-gutter-delete-background-color: rgba(248, 81, 73, 0.05);
+  --diff-gutter-delete-text-color: var(--text-muted);
+  --diff-gutter-selected-background-color: rgba(88, 166, 255, 0.08);
+  --diff-gutter-selected-text-color: var(--text);
+  --diff-code-insert-background-color: rgba(63, 185, 80, 0.04);
+  --diff-code-insert-text-color: var(--text);
+  --diff-code-delete-background-color: rgba(248, 81, 73, 0.04);
+  --diff-code-delete-text-color: var(--text);
+  --diff-code-insert-edit-background-color: rgba(63, 185, 80, 0.08);
+  --diff-code-insert-edit-text-color: var(--text);
+  --diff-code-delete-edit-background-color: rgba(248, 81, 73, 0.08);
+  --diff-code-delete-edit-text-color: var(--text);
+  --diff-code-selected-background-color: rgba(88, 166, 255, 0.08);
+  --diff-code-selected-text-color: var(--text);
 }
 .code-diff-view .diff-gutter,
 .code-diff-view .diff-code {
   font-family: 'Cascadia Code', 'Fira Code', monospace;
   font-size: 12px;
   line-height: 1.5;
+}
+.code-diff-view .diff {
+  background: var(--bg);
+}
+.code-diff-view .diff td {
+  background: transparent;
 }
 .code-diff-view .diff-gutter {
   white-space: nowrap;
@@ -300,15 +326,30 @@ a:hover { text-decoration: underline; }
 }
 .code-diff-view .diff-gutter-insert,
 .code-diff-view .diff-code-insert {
-  background: rgba(63, 185, 80, 0.12);
+  background-color: rgba(63, 185, 80, 0.04);
 }
 .code-diff-view .diff-gutter-delete,
 .code-diff-view .diff-code-delete {
-  background: rgba(248, 81, 73, 0.12);
+  background-color: rgba(248, 81, 73, 0.04);
 }
 .code-diff-view .diff-line:hover .diff-gutter,
 .code-diff-view .diff-line:hover .diff-code {
   background-color: rgba(88, 166, 255, 0.08);
+}
+.code-diff-view .diff-gutter-insert::before,
+.code-diff-view .diff-gutter-delete::before {
+  display: inline-block;
+  width: 1ch;
+  margin-right: 6px;
+  font-weight: 700;
+}
+.code-diff-view .diff-gutter-insert::before {
+  content: '+';
+  color: var(--green);
+}
+.code-diff-view .diff-gutter-delete::before {
+  content: '-';
+  color: var(--red);
 }
 .code-diff-view .code-line-target .diff-gutter,
 .code-diff-view .code-line-target .diff-code {
