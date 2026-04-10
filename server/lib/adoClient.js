@@ -1,11 +1,13 @@
 import fetch from 'node-fetch';
 import { execSync } from 'child_process';
+import { readConfig } from './config.js';
 
 /**
  * ADO REST API client for posting PR comments.
  * Uses `az cli` to fetch a Bearer token (no PAT needed).
  * 
- * Requires environment variables:
+ * Uses config.json for default ADO org/project, with environment variables
+ * available as optional overrides:
  *   ADO_ORG        - Organization name (e.g., "msazure")
  *   ADO_PROJECT    - Project name (e.g., "One")
  * 
@@ -29,11 +31,14 @@ async function getAccessToken() {
   return cachedToken;
 }
 
-function getConfig() {
-  const org = process.env.ADO_ORG;
-  const project = process.env.ADO_PROJECT;
+async function getConfig() {
+  const config = await readConfig();
+  const org = process.env.ADO_ORG || config.ado?.org;
+  const project = process.env.ADO_PROJECT || config.ado?.project;
   if (!org || !project) {
-    throw new Error('Missing ADO_ORG or ADO_PROJECT environment variables');
+    const err = new Error('Missing ADO org/project. Set config.ado.org and config.ado.project or use ADO_ORG / ADO_PROJECT.');
+    err.statusCode = 400;
+    throw err;
   }
   return { org, project };
 }
@@ -52,7 +57,7 @@ function apiBase(org, project) {
  * Creates an inline comment at the specified file and line range.
  */
 export async function postPRComment(repoName, prId, { file, startLine, endLine, comment, suggestion }) {
-  const { org, project } = getConfig();
+  const { org, project } = await getConfig();
   const base = apiBase(org, project);
   const url = `${base}/git/repositories/${repoName}/pullRequests/${prId}/threads?api-version=7.1`;
 
@@ -109,7 +114,7 @@ export async function postPRComment(repoName, prId, { file, startLine, endLine, 
  * Get PR details from ADO (used for metadata enrichment).
  */
 export async function getPRDetails(repoName, prId) {
-  const { org, project } = getConfig();
+  const { org, project } = await getConfig();
   const base = apiBase(org, project);
   const url = `${base}/git/repositories/${repoName}/pullRequests/${prId}?api-version=7.1`;
 

@@ -1,4 +1,8 @@
 {
+  "ado": {
+    "org": "msazure",
+    "project": "One"
+  },
   "profiles": {
     "copilot-cli": {
       "program": "copilot",

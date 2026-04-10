@@ -1,12 +1,10 @@
-import fs from 'fs/promises';
 import { spawn } from 'child_process';
 import path from 'path';
 import os from 'os';
-import { fileURLToPath } from 'url';
 import { writeReview, getReview, addDiscussionMessage, updateFeedbackContent } from './fileStore.js';
+import fs from 'fs/promises';
+import { readConfig, writeConfig } from './config.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CONFIG_PATH = path.join(__dirname, '..', '..', 'config.json');
 const REVIEWS_ROOT = path.join(os.homedir(), 'pr-reviews');
 
 // Track running agent processes: key = `${repo}/${prId}`
@@ -25,11 +23,6 @@ function buildSpawnEnv() {
     CLICOLOR_FORCE: process.env.CLICOLOR_FORCE || '1',
     TERM: process.env.TERM || 'xterm-256color',
   };
-}
-
-async function loadConfig() {
-  const raw = await fs.readFile(CONFIG_PATH, 'utf-8');
-  return JSON.parse(raw);
 }
 
 /** Parse an ADO PR URL into { org, project, repo, prId } */
@@ -55,7 +48,7 @@ export function parsePrUrl(url) {
 
 /** Build the command + args from config, substituting {{prUrl}} and appending extra prompt */
 async function buildCommand(prUrl, extraPrompt) {
-  const config = await loadConfig();
+  const config = await readConfig();
   const profile = config.profiles?.[config.activeProfile] || config.reviewCommand;
 
   const program = profile.program;
@@ -264,7 +257,7 @@ CRITICAL RULES:
 - If you edit feedback.json directly, edit history will be lost and the review state may become corrupted.
 - Write ONLY valid JSON to the response file, nothing else.`;
 
-  const config = await loadConfig();
+  const config = await readConfig();
   const profile = config.profiles?.[config.activeProfile] || Object.values(config.profiles)[0];
   const program = profile.program;
 
@@ -536,27 +529,22 @@ export async function killAgent(repo, prId) {
 
 /** Get config (profiles + active) for the UI settings */
 export async function getConfig() {
-  return loadConfig();
+  return readConfig();
 }
 
 /** Update active profile */
 export async function setActiveProfile(profileName) {
-  const config = await loadConfig();
+  const config = await readConfig();
   if (!config.profiles?.[profileName]) {
     throw new Error(`Profile "${profileName}" not found. Available: ${Object.keys(config.profiles || {}).join(', ')}`);
   }
   config.activeProfile = profileName;
-  await fs.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
-  return config;
+  return writeConfig(config);
 }
 
-/** Save full config (profiles + activeProfile) */
+/** Save full config (profiles + activeProfile + ADO defaults) */
 export async function saveConfig(newConfig) {
-  const config = await loadConfig();
-  if (newConfig.profiles) config.profiles = newConfig.profiles;
-  if (newConfig.activeProfile) config.activeProfile = newConfig.activeProfile;
-  await fs.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
-  return config;
+  return writeConfig(newConfig);
 }
 
 // --- Lockfile helpers ---
@@ -782,7 +770,7 @@ export async function launchCurationAgent() {
     return { status: 'already_running', pid: curationAgent.pid };
   }
 
-  const config = await loadConfig();
+  const config = await readConfig();
   const profileName = config.activeProfile || 'copilot-cli';
   const profile = config.profiles[profileName];
   if (!profile) throw new Error(`Profile ${profileName} not found`);

@@ -37,7 +37,19 @@ Open http://localhost:5173 to see:
 ### 3. Post to ADO
 Click "Post to ADO" to post accepted comments as PR threads under your identity.
 
-Requires `az login` and environment variables:
+Requires `az login`.
+
+ADO org/project defaults are stored in `config.json`:
+```json
+{
+  "ado": {
+    "org": "msazure",
+    "project": "One"
+  }
+}
+```
+
+Environment variables are optional overrides:
 ```powershell
 $env:ADO_ORG = "msazure"
 $env:ADO_PROJECT = "One"
