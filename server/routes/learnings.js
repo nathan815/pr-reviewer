@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getLearningStats,
   getLearningExamples,
+  deleteLearningExample,
   getGuidelines,
   listRepoGuidelines,
   getExamplesSinceCuration,
@@ -60,6 +61,20 @@ learningsRouter.get('/curate/status', async (_req, res) => {
   try {
     const status = getCurationStatus();
     res.json(status);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete a single signal
+learningsRouter.delete('/examples', async (req, res) => {
+  try {
+    const { repo, prId, feedbackId, timestamp } = req.body;
+    if (!repo || !prId || !feedbackId || !timestamp) {
+      return res.status(400).json({ error: 'repo, prId, feedbackId, and timestamp are required' });
+    }
+    await deleteLearningExample(repo, prId, feedbackId, timestamp);
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

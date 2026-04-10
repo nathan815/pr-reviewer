@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import AnsiToHtml from 'ansi-to-html';
@@ -17,11 +17,13 @@ export default function Learnings() {
   const [launching, setLaunching] = useState(false);
   const [activeTab, setActiveTab] = useState('guidelines');
   const [selectedRepo, setSelectedRepo] = useState(null);
+  const selectedRepoRef = useRef(null);
   const [exampleFilter, setExampleFilter] = useState('all');
 
   const loadData = () => {
     fetch('/api/learnings/stats').then(r => r.json()).then(setStats).catch(() => {});
-    fetch('/api/learnings/guidelines').then(r => r.json()).then(setGuidelines).catch(() => {});
+    const repoParam = selectedRepoRef.current ? `?repo=${encodeURIComponent(selectedRepoRef.current)}` : '';
+    fetch(`/api/learnings/guidelines${repoParam}`).then(r => r.json()).then(setGuidelines).catch(() => {});
     fetch('/api/learnings/curate/status').then(r => r.json()).then(setCurationStatus).catch(() => {});
   };
 
@@ -33,6 +35,7 @@ export default function Learnings() {
 
   const loadRepoGuidelines = (repo) => {
     setSelectedRepo(repo);
+    selectedRepoRef.current = repo;
     fetch(`/api/learnings/guidelines?repo=${encodeURIComponent(repo)}`)
       .then(r => r.json())
       .then(data => setGuidelines(prev => ({ ...prev, perRepo: data.perRepo })))
@@ -89,7 +92,6 @@ export default function Learnings() {
 
   return (
     <>
-      <Link to="/" className="back-link">← Back to Dashboard</Link>
 
       <div className="overview-section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -201,13 +203,13 @@ export default function Learnings() {
             </button>
           ))}
           <button
-            className={`filter-btn ${activeTab === 'examples' ? 'active' : ''}`}
+            className={`filter-btn ${activeTab === 'signals' ? 'active' : ''}`}
             onClick={() => {
-              setActiveTab('examples');
+              setActiveTab('signals');
               if (!examples) fetch('/api/learnings/examples').then(r => r.json()).then(setExamples).catch(() => {});
             }}
           >
-            Examples {stats ? `(${stats.total})` : ''}
+            Signals {stats ? `(${stats.total})` : ''}
           </button>
         </div>
 
@@ -235,7 +237,7 @@ export default function Learnings() {
           </div>
         )}
 
-        {activeTab === 'examples' && (
+        {activeTab === 'signals' && (
           <div className="overview-section">
             {!examples || examples.length === 0 ? (
               <div className="empty-state">No signals yet. Accept/reject feedback, revise it through discussion, or sync ADO replies to start building learnings.</div>
@@ -283,13 +285,29 @@ export default function Learnings() {
                             {ex.repo} · {new Date(ex.timestamp).toLocaleDateString()}
                           </span>
                           <Link
-                            to={`/review/${ex.repo}/${ex.prId}?highlight=${ex.feedbackId}`}
+                            to={`/review/${ex.repo}/${ex.prId}#feedback-${ex.feedbackId}`}
                             target="_blank"
                             className="example-link"
                             title="View in context"
                           >
                             View in PR ↗
                           </Link>
+                          <button
+                            className="btn btn-sm"
+                            title="Delete signal"
+                            style={{ marginLeft: 4, color: 'var(--red)', padding: '2px 6px', fontSize: 12, lineHeight: 1 }}
+                            onClick={async () => {
+                              if (!confirm('Delete this signal?')) return;
+                              await fetch('/api/learnings/examples', {
+                                method: 'DELETE',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ repo: ex.repo, prId: ex.prId, feedbackId: ex.feedbackId, timestamp: ex.timestamp }),
+                              });
+                              setExamples(prev => prev.filter(e => !(e.repo === ex.repo && e.prId === ex.prId && e.feedbackId === ex.feedbackId && e.timestamp === ex.timestamp)));
+                            }}
+                          >
+                            ✕
+                          </button>
                         </div>
                         <div className="example-body">
                           <strong>{ex.title}</strong>
@@ -302,6 +320,16 @@ export default function Learnings() {
                           {ex.adoReply?.content && (
                             <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 6 }}>
                               Reply from <strong>{ex.adoReply.author}</strong>: {ex.adoReply.content}
+                            </div>
+                          )}
+                          {ex.adoReplies?.length > 0 && (
+                            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 6 }}>
+                              <strong>{ex.adoReplies.length} {ex.adoReplies.length === 1 ? 'reply' : 'replies'}:</strong>
+                              {ex.adoReplies.map((r, ri) => (
+                                <div key={ri} style={{ marginTop: 4, paddingLeft: 8, borderLeft: '2px solid var(--border)' }}>
+                                  <strong>{r.author}</strong>: {r.content}
+                                </div>
+                              ))}
                             </div>
                           )}
                           {ex.file && (

@@ -512,7 +512,29 @@ async function recordLearningExample({
   await fs.appendFile(EXAMPLES_PATH, JSON.stringify(example) + '\n', 'utf-8');
 }
 
-/** Remove learning examples for a specific feedback item (on reset) */
+/** Upsert a learning example — replaces any existing one matching repo+prId+feedbackId+exampleType */
+async function upsertLearningExample(example) {
+  await ensureDir(LEARNINGS_DIR);
+  let lines = [];
+  try {
+    const raw = await fs.readFile(EXAMPLES_PATH, 'utf-8');
+    lines = raw.trim().split('\n').filter(Boolean);
+  } catch { /* empty */ }
+
+  const idx = lines.findIndex(line => {
+    const ex = JSON.parse(line);
+    return ex.repo === example.repo && String(ex.prId) === String(example.prId)
+      && ex.feedbackId === example.feedbackId && ex.exampleType === example.exampleType;
+  });
+
+  const json = JSON.stringify(example);
+  if (idx >= 0) {
+    lines[idx] = json;
+  } else {
+    lines.push(json);
+  }
+  await fs.writeFile(EXAMPLES_PATH, lines.join('\n') + '\n', 'utf-8');
+}
 async function removeLearningExample(repo, prId, feedbackId) {
   try {
     const raw = await fs.readFile(EXAMPLES_PATH, 'utf-8');
@@ -525,6 +547,17 @@ async function removeLearningExample(repo, prId, feedbackId) {
   } catch {
     // No examples file yet — nothing to remove
   }
+}
+
+/** Delete a single learning example by matching repo+prId+feedbackId+timestamp */
+export async function deleteLearningExample(repo, prId, feedbackId, timestamp) {
+  const raw = await fs.readFile(EXAMPLES_PATH, 'utf-8');
+  const lines = raw.trim().split('\n').filter(Boolean);
+  const filtered = lines.filter(line => {
+    const ex = JSON.parse(line);
+    return !(ex.repo === repo && String(ex.prId) === String(prId) && ex.feedbackId === feedbackId && ex.timestamp === timestamp);
+  });
+  await fs.writeFile(EXAMPLES_PATH, filtered.length ? filtered.join('\n') + '\n' : '', 'utf-8');
 }
 
 /** Get all learning examples */
@@ -620,16 +653,20 @@ export async function syncAdoReplies(repo, prId, feedbackId = null) {
       };
     });
 
-    for (const reply of result.newReplies || []) {
-      imported += 1;
-      await recordLearningExample({
-        repo,
-        prId,
-        item: result.itemSnapshot,
+    if (result.newReplies?.length) {
+      imported += result.newReplies.length;
+      // Upsert a single signal per feedback item with the full reply thread
+      const base = buildLearningBase(repo, prId, result.itemSnapshot);
+      await upsertLearningExample({
+        ...base,
         exampleType: 'ado-reply',
-        feedbackStatus: result.itemSnapshot.status,
+        decision: null,
+        userNote: null,
+        feedbackStatus: result.itemSnapshot.status || null,
+        discussion: null,
+        editSummary: null,
         adoThreadId: item.adoThreadId,
-        adoReply: reply,
+        adoReplies: result.itemSnapshot.adoReplies || [],
       });
     }
   }

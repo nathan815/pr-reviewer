@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import Markdown from 'react-markdown';
 import FeedbackCard from '../components/FeedbackCard';
 import RiskBadge from '../components/RiskBadge';
@@ -9,8 +9,8 @@ import { IconArrowDown, IconArrowUp, IconCheck, IconX, IconSend, IconTrash } fro
 
 export default function ReviewDetail() {
   const { repo, prId } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const highlightId = searchParams.get('highlight');
+  const location = useLocation();
+  const highlightId = location.hash ? location.hash.replace('#feedback-', '') : null;
   const [review, setReview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
@@ -112,6 +112,12 @@ export default function ReviewDetail() {
       }, 200);
     }
   }, [highlightId, review]);
+
+  useEffect(() => {
+    const title = review?.metadata?.title || `PR #${prId}`;
+    document.title = `${title} — PR Review`;
+    return () => { document.title = 'PR Review Agent'; };
+  }, [review?.metadata?.title, prId]);
 
   useEffect(() => {
     const updateStickyState = () => {
@@ -315,7 +321,6 @@ export default function ReviewDetail() {
 
   return (
     <>
-      <Link to="/" className="back-link">← Back to Dashboard</Link>
 
       {/* PR Header */}
       <div className="overview-section">
@@ -323,7 +328,7 @@ export default function ReviewDetail() {
           <div>
             <h1 style={{ fontSize: 22, marginBottom: 4 }}>{metadata.title || `PR #${prId}`}</h1>
             <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-              {adoInfo?.author || metadata.author} → {metadata.targetBranch} &nbsp;|&nbsp; {repo} #{prId}
+              {adoInfo?.author || metadata.author} &nbsp;|&nbsp; {metadata.sourceBranch || '?'} → {metadata.targetBranch || '?'} &nbsp;|&nbsp; {repo} #{prId}
               {adoInfo?.isDraft && <span className="badge" style={{ marginLeft: 8, background: 'rgba(210,153,34,0.15)', color: 'var(--orange)' }}>Draft</span>}
             </div>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>

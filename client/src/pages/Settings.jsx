@@ -66,13 +66,14 @@ export default function Settings() {
   return (
     <>
       <div className="card" style={{ marginBottom: 20 }}>
-        <h2 className="section-title">Agent Profiles</h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 8 }}>
-          Configure which program runs the review agent and its arguments.
-          Active profile: <strong style={{ color: 'var(--accent)' }}>{config?.activeProfile}</strong>.
-          Use <code>{'{{prUrl}}'}</code> as a placeholder for the PR URL in args. ADO defaults live in
-          <code> ado.org</code> and <code>ado.project</code>; <code>ADO_ORG</code> and <code>ADO_PROJECT</code>
-          still override them when set.
+        <h2 className="section-title">Configuration</h2>
+        <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 4 }}>
+          Active agent profile: <strong style={{ color: 'var(--accent)' }}>{config?.activeProfile || 'default'}</strong>
+        </p>
+        <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 12 }}>
+          Define agent profiles under <code>profiles</code> — each needs <code>program</code> and <code>args</code>.
+          Use <code>{'{{prUrl}}'}</code> as a placeholder for the PR URL in args.
+          ADO defaults are in <code>ado.org</code> / <code>ado.project</code>; env vars <code>ADO_ORG</code> and <code>ADO_PROJECT</code> override them.
         </p>
         <textarea
           className="instructions-editor"

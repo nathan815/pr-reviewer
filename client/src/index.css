@@ -184,6 +184,10 @@ a:hover { text-decoration: underline; }
 .feedback-number-link {
   display: inline-flex;
   text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
 }
 .feedback-number-link:hover .feedback-number-badge {
   background: rgba(88, 166, 255, 0.2);
@@ -416,6 +420,25 @@ a:hover { text-decoration: underline; }
   max-height: 500px;
   overflow-y: auto;
   background: var(--bg);
+}
+.diff-gutter-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  margin: 4px 0 4px 8px;
+}
+.diff-gutter-expand:hover {
+  background: var(--border);
+  color: var(--text);
 }
 .code-diff-view {
   width: 100%;

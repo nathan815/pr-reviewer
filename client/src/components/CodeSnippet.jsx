@@ -11,6 +11,7 @@ import refractor from 'refractor';
 
 const INITIAL_CONTEXT = 5;
 const EXPAND_STEP = 10;
+const FULL_DIFF_CONTEXT = 1000000;
 const diffCache = new Map();
 
 function splitLines(text = '') {
@@ -166,9 +167,8 @@ function buildFallbackHunks(lines, start, end) {
   return hunk ? [hunk] : [];
 }
 
-function getRequestCacheKey(repo, prId, file, commitSha, showFullFile, expandUp, expandDown) {
-  const context = showFullFile ? 'full' : String(Math.max(expandUp, expandDown));
-  return [repo, prId, file, commitSha || '', context].join('::');
+function getRequestCacheKey(repo, prId, file, commitSha) {
+  return [repo, prId, file, commitSha || '', 'full-diff'].join('::');
 }
 
 export default function CodeSnippet({ repo, prId, file, startLine, endLine, commitSha }) {
@@ -187,8 +187,8 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
   }, [repo, prId, file, commitSha]);
 
   const cacheKey = useMemo(
-    () => getRequestCacheKey(repo, prId, file, commitSha, showFullFile, expandUp, expandDown),
-    [repo, prId, file, commitSha, showFullFile, expandUp, expandDown]
+    () => getRequestCacheKey(repo, prId, file, commitSha),
+    [repo, prId, file, commitSha]
   );
 
   useEffect(() => {
@@ -206,10 +206,10 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
       setLoading(true);
       setError(null);
 
-      try {
-        const params = new URLSearchParams({ path: file });
-        if (commitSha) params.set('commit', commitSha);
-        params.set('context', String(showFullFile ? 9999 : Math.max(expandUp, expandDown)));
+        try {
+          const params = new URLSearchParams({ path: file });
+          if (commitSha) params.set('commit', commitSha);
+          params.set('context', String(FULL_DIFF_CONTEXT));
 
         const response = await fetch(`/api/reviews/${repo}/${prId}/file-diff?${params}`);
         const data = response.ok ? await readJsonIfPossible(response) : null;
@@ -256,7 +256,7 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
     return () => {
       cancelled = true;
     };
-  }, [repo, prId, file, commitSha, showFullFile, expandUp, expandDown, cacheKey]);
+  }, [repo, prId, file, commitSha, cacheKey]);
 
   const targetStart = startLine || 1;
   const targetEnd = endLine || startLine || targetStart;
@@ -301,8 +301,10 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
     [visibleEnd, visibleHunks, visibleStart]
   );
 
+  // Only tokenize (syntax highlight) when showing full file — clipped hunks
+  // cause tokenize to misalign oldSource reconstruction with partial changes.
   const tokens = useMemo(() => {
-    if (!visibleHunks.length || !language) return null;
+    if (!showFullFile || !visibleHunks.length || !language) return null;
 
     try {
       return tokenize(visibleHunks, {
@@ -315,13 +317,23 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
     } catch {
       return null;
     }
-  }, [diffData?.newSource, diffData?.oldSource, language, visibleHunks]);
+  }, [showFullFile, diffData?.newSource, diffData?.oldSource, language, visibleHunks]);
 
   const canExpandUp = !showFullFile && renderedRange.start > 1;
   const canExpandDown = !showFullFile && renderedRange.end < newLines.length;
 
+  // Auto-scroll to target only on initial load and full-file toggle, not on expand
+  const hasScrolledRef = useRef(false);
+  const prevShowFullFileRef = useRef(showFullFile);
+
   useEffect(() => {
-    if (loading || !bodyRef.current) return;
+    // Reset scroll flag when toggling full file / focus region
+    if (prevShowFullFileRef.current !== showFullFile) {
+      hasScrolledRef.current = false;
+      prevShowFullFileRef.current = showFullFile;
+    }
+
+    if (loading || !bodyRef.current || hasScrolledRef.current) return;
 
     const frame = requestAnimationFrame(() => {
       const container = bodyRef.current;
@@ -331,10 +343,11 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
       const targetTop = targetRow.offsetTop;
       const offset = Math.max(0, targetTop - Math.floor(container.clientHeight / 3));
       container.scrollTop = offset;
+      hasScrolledRef.current = true;
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [loading, visibleHunks, targetStart, targetEnd]);
+  }, [loading, visibleHunks, showFullFile, targetStart, targetEnd]);
 
   if (loading) {
     return (
@@ -355,12 +368,6 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
           {commitSha && <span className="code-snippet-sha">@ {commitSha.slice(0, 7)}</span>}
         </span>
         <div className="code-snippet-controls">
-          <button className="btn btn-sm" onClick={() => setExpandUp(value => value + EXPAND_STEP)} disabled={!canExpandUp}>
-            ↑ +10
-          </button>
-          <button className="btn btn-sm" onClick={() => setExpandDown(value => value + EXPAND_STEP)} disabled={!canExpandDown}>
-            ↓ +10
-          </button>
           <button className="btn btn-sm" onClick={() => setShowFullFile(value => !value)}>
             {showFullFile ? 'Focus region' : 'Full file'}
           </button>
@@ -374,6 +381,11 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
       )}
 
       <div className="code-snippet-body" ref={bodyRef}>
+        {canExpandUp && (
+          <button className="diff-gutter-expand" title={`Show ${Math.min(EXPAND_STEP, renderedRange.start - 1)} more lines`} onClick={() => setExpandUp(value => value + EXPAND_STEP)}>
+            ▴
+          </button>
+        )}
         <Diff
           viewType="unified"
           diffType={getDiffType(parsedFile)}
@@ -393,6 +405,11 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
         >
           {hunks => hunks.map(hunk => <Hunk key={hunk.content} hunk={hunk} />)}
         </Diff>
+        {canExpandDown && (
+          <button className="diff-gutter-expand" title={`Show ${Math.min(EXPAND_STEP, newLines.length - renderedRange.end)} more lines`} onClick={() => setExpandDown(value => value + EXPAND_STEP)}>
+            ▾
+          </button>
+        )}
       </div>
     </div>
   );
