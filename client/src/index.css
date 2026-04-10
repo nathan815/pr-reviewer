@@ -170,10 +170,20 @@ a:hover { text-decoration: underline; }
   font-weight: 700;
   font-family: 'Cascadia Code', 'Fira Code', monospace;
 }
+.feedback-number-link {
+  display: inline-flex;
+  text-decoration: none;
+}
+.feedback-number-link:hover .feedback-number-badge {
+  background: rgba(88, 166, 255, 0.2);
+}
 .feedback-file {
   font-family: 'Cascadia Code', 'Fira Code', monospace;
   font-size: 13px;
   color: var(--accent);
+}
+.feedback-file-link:hover {
+  text-decoration: underline;
 }
 .feedback-lines {
   font-family: monospace;

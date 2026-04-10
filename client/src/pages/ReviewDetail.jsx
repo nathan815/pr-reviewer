@@ -544,6 +544,7 @@ export default function ReviewDetail() {
               itemNumber={itemNumbers.get(item.id)}
               repo={repo}
               prId={prId}
+              prUrl={metadata.url}
               onAccept={(note) => updateStatus(item.id, 'accepted', note)}
               onNote={(note) => updateStatus(item.id, 'noted', note)}
               onReject={(note) => updateStatus(item.id, 'rejected', note)}

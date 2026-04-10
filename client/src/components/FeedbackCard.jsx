@@ -31,7 +31,30 @@ function formatEditSummary(editSummary) {
   return labels.map(label => `updated ${label}`);
 }
 
-export default function FeedbackCard({ item, itemNumber, repo, prId, onAccept, onNote, onReject, onReset, onPost, onItemUpdated }) {
+function buildAdoFileUrl(prUrl, filePath, startLine, endLine) {
+  if (!prUrl || !filePath) return null;
+
+  try {
+    const url = new URL(prUrl);
+    const normalizedPath = filePath.startsWith('/') ? filePath.replace(/\\/g, '/') : `/${filePath.replace(/\\/g, '/')}`;
+    url.searchParams.set('_a', 'files');
+    url.searchParams.set('path', normalizedPath);
+    if (startLine) {
+      url.searchParams.set('line', String(startLine));
+      url.searchParams.set('lineStartColumn', '1');
+      url.searchParams.set('lineEndColumn', '1');
+      url.searchParams.set('lineStyle', 'plain');
+      if (endLine && endLine !== startLine) {
+        url.searchParams.set('lineEnd', String(endLine));
+      }
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAccept, onNote, onReject, onReset, onPost, onItemUpdated }) {
   const [postingThis, setPostingThis] = useState(false);
   const [error, setError] = useState(null);
   const [noteText, setNoteText] = useState('');
@@ -49,6 +72,7 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, onAccept, o
   const isPosted = item.status === 'posted';
   const isRejected = item.status === 'rejected';
   const discussion = item.discussion || [];
+  const fileUrl = buildAdoFileUrl(prUrl, item.file, item.startLine, item.endLine);
 
   // Check if a discussion agent is already running on mount
   useEffect(() => {
@@ -122,9 +146,25 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, onAccept, o
     <div id={`feedback-${item.id}`} className={`feedback-card severity-${item.severity}`}>
       <div className="feedback-header">
         <div className="feedback-header-left">
-          <span className="feedback-number-badge">#{itemNumber}</span>
+          <a href={`#feedback-${item.id}`} className="feedback-number-link">
+            <span className="feedback-number-badge">#{itemNumber}</span>
+          </a>
           <span>{icon}</span>
-          {item.file && <span className="feedback-file">{item.file}</span>}
+          {item.file && (
+            fileUrl ? (
+              <a
+                href={fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="feedback-file feedback-file-link"
+                title="Open this file in ADO"
+              >
+                {item.file}
+              </a>
+            ) : (
+              <span className="feedback-file">{item.file}</span>
+            )
+          )}
           {item.startLine && (
             <span className="feedback-lines">
               L{item.startLine}{item.endLine && item.endLine !== item.startLine ? `-${item.endLine}` : ''}
