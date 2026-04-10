@@ -5,7 +5,6 @@ import {
   parseDiff,
   tokenize,
   markEdits,
-  computeNewLineNumber,
   textLinesToHunk,
 } from 'react-diff-view';
 import refractor from 'refractor';
@@ -59,6 +58,18 @@ function getHunkNewRange(hunk) {
   return { start, end };
 }
 
+function getChangeNewLineNumber(change) {
+  if (typeof change?.newLineNumber === 'number') return change.newLineNumber;
+  if (change?.isInsert && typeof change?.lineNumber === 'number') return change.lineNumber;
+  return null;
+}
+
+function getChangeOldLineNumber(change) {
+  if (typeof change?.oldLineNumber === 'number') return change.oldLineNumber;
+  if (change?.isDelete && typeof change?.lineNumber === 'number') return change.lineNumber;
+  return null;
+}
+
 function overlapsWindow(hunk, start, end) {
   const range = getHunkNewRange(hunk);
   return range.end >= start - 1 && range.start <= end + 1;
@@ -83,6 +94,55 @@ function getRenderedRange(hunks, fallbackStart, fallbackEnd) {
   }
 
   return { start, end };
+}
+
+function buildHunkHeader(oldStart, oldLines, newStart, newLines) {
+  const oldCount = Math.max(0, oldLines);
+  const newCount = Math.max(0, newLines);
+  return `@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`;
+}
+
+function clipHunkToWindow(hunk, start, end) {
+  const changes = hunk?.changes || [];
+  if (!changes.length) return null;
+
+  const includedIndices = changes
+    .map((change, index) => {
+      const newLineNumber = getChangeNewLineNumber(change);
+      const matchesNew = typeof newLineNumber === 'number' && newLineNumber >= start && newLineNumber <= end;
+      return matchesNew ? index : -1;
+    })
+    .filter(index => index >= 0);
+
+  if (!includedIndices.length) return null;
+
+  let sliceStart = includedIndices[0];
+  let sliceEnd = includedIndices[includedIndices.length - 1];
+
+  while (sliceStart > 0 && changes[sliceStart - 1]?.isDelete) {
+    sliceStart -= 1;
+  }
+  while (sliceEnd < changes.length - 1 && changes[sliceEnd + 1]?.isDelete) {
+    sliceEnd += 1;
+  }
+
+  const clippedChanges = changes.slice(sliceStart, sliceEnd + 1);
+  const firstNewLine = clippedChanges.map(getChangeNewLineNumber).find(line => typeof line === 'number');
+  const firstOldLine = clippedChanges.map(getChangeOldLineNumber).find(line => typeof line === 'number');
+  const oldLines = clippedChanges.filter(change => getChangeOldLineNumber(change) !== null).length;
+  const newLines = clippedChanges.filter(change => getChangeNewLineNumber(change) !== null).length;
+  const oldStart = firstOldLine ?? hunk.oldStart;
+  const newStart = firstNewLine ?? hunk.newStart;
+
+  return {
+    ...hunk,
+    content: buildHunkHeader(oldStart, oldLines, newStart, newLines),
+    oldStart,
+    newStart,
+    oldLines,
+    newLines,
+    changes: clippedChanges,
+  };
 }
 
 function getDiffType(file) {
@@ -222,7 +282,10 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
     const sourceHunks = parsedFile?.hunks || [];
     if (sourceHunks.length) {
       if (showFullFile) return sourceHunks;
-      const focused = sourceHunks.filter(hunk => overlapsWindow(hunk, visibleStart, visibleEnd));
+      const focused = sourceHunks
+        .filter(hunk => overlapsWindow(hunk, visibleStart, visibleEnd))
+        .map(hunk => clipHunkToWindow(hunk, visibleStart, visibleEnd))
+        .filter(Boolean);
       return focused.length ? focused : sourceHunks;
     }
 
@@ -320,7 +383,7 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
           generateLineClassName={({ changes, defaultGenerate }) => {
             const classes = [defaultGenerate()];
             if (changes.some(change => {
-              const lineNumber = computeNewLineNumber(change);
+              const lineNumber = getChangeNewLineNumber(change);
               return lineNumber >= targetStart && lineNumber <= targetEnd;
             })) {
               classes.push('code-line-target');

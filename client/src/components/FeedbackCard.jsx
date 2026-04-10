@@ -372,7 +372,7 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAc
               type="text"
               className="feedback-note-input"
               style={{ flex: 1 }}
-              placeholder="Suggest edits or ask about this feedback"
+              placeholder="Request agent make changes or answer questions about this feedback"
               value={discussionInput}
               onChange={e => setDiscussionInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !discussing) handleAsk(); }}
@@ -383,7 +383,7 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAc
               onClick={handleAsk}
               disabled={discussing || !discussionInput.trim()}
             >
-              Ask
+              Send
             </button>
           </div>
         </div>
