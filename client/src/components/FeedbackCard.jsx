@@ -34,17 +34,23 @@ function formatEditSummary(editSummary) {
 const DECISION_CONFIG = {
   accepted: {
     label: 'Accept',
+    pastLabel: 'Accepted',
     buttonClass: 'btn-accept',
+    labelColor: 'var(--green)',
     icon: <IconCheck />,
   },
   noted: {
     label: 'Accept As Note',
+    pastLabel: 'Noted',
     buttonClass: 'btn-noted',
+    labelColor: 'var(--accent)',
     icon: <IconCheck />,
   },
   rejected: {
     label: 'Reject',
+    pastLabel: 'Rejected',
     buttonClass: 'btn-reject',
+    labelColor: 'var(--red)',
     icon: <IconX />,
   },
 };
@@ -59,45 +65,54 @@ const VERDICT_STYLES = {
 function ResolutionBanner({ resolution, onAction, feedbackId }) {
   const [editingReply, setEditingReply] = useState(false);
   const [replyText, setReplyText] = useState(resolution.proposedReply || '');
-  const [posting, setPosting] = useState(false);
+  const [activeAction, setActiveAction] = useState(null); // 'accept' | 'acceptReply' | null
+  const [error, setError] = useState(null);
 
   const style = VERDICT_STYLES[resolution.verdict] || VERDICT_STYLES['still-open'];
-  const isAccepted = resolution.accepted === 'accepted';
-  const isRejected = resolution.accepted === 'rejected';
+  const isDismissed = resolution.accepted === 'dismissed';
   const isPosted = !!resolution.posted;
 
   useEffect(() => {
     setReplyText(resolution.proposedReply || '');
   }, [resolution.proposedReply]);
 
-  const handleAccept = async () => {
-    if (onAction) await onAction(feedbackId, 'accept', { proposedReply: replyText });
+  const runAction = async (fn) => {
+    setError(null);
+    try { await fn(); } catch (err) { setError(err.message); }
   };
-  const handleReject = async () => {
-    if (onAction) await onAction(feedbackId, 'reject');
-  };
-  const handlePost = async () => {
-    setPosting(true);
+
+  const handleDismiss = () => runAction(() => onAction?.(feedbackId, 'dismiss'));
+  const handleUndo = () => runAction(() => onAction?.(feedbackId, 'undismiss', { proposedReply: replyText }));
+  const handleAcceptAndReply = () => runAction(async () => {
+    setActiveAction('acceptReply');
     try {
-      if (onAction) await onAction(feedbackId, 'post');
+      await onAction?.(feedbackId, 'accept', { proposedReply: replyText });
+      await onAction?.(feedbackId, 'post');
     } finally {
-      setPosting(false);
+      setActiveAction(null);
     }
-  };
+  });
+  const handleAccept = () => runAction(async () => {
+    setActiveAction('accept');
+    try {
+      await onAction?.(feedbackId, 'resolve-only');
+    } finally {
+      setActiveAction(null);
+    }
+  });
   const handleSaveReply = async () => {
-    if (onAction) await onAction(feedbackId, 'accept', { proposedReply: replyText });
     setEditingReply(false);
   };
 
   return (
     <div className="resolution-banner" style={{ background: style.bg, borderColor: style.border }}>
       <div className="resolution-banner-header">
-        <span style={{ color: style.color, fontWeight: 600 }}>{style.label}</span>
+        <span style={{ color: style.color, fontWeight: 600 }}>Agent Says: &nbsp;{style.label}</span>
         {resolution.confidence && (
           <span className="badge" style={{ fontSize: 10 }}>{resolution.confidence} confidence</span>
         )}
         {isPosted && (
-          <span className="badge badge-low" style={{ fontSize: 10 }}>✓ Posted to ADO</span>
+          <span className="badge badge-low" style={{ fontSize: 10 }}>✓ Accepted</span>
         )}
       </div>
 
@@ -118,15 +133,15 @@ function ResolutionBanner({ resolution, onAction, feedbackId }) {
                 style={{ width: '100%', minHeight: 60, fontSize: 13, background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 4, padding: '6px 8px', resize: 'vertical' }}
               />
               <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-                <button className="btn btn-sm btn-accept" onClick={handleSaveReply}>Save</button>
+                <button className="btn btn-sm btn-accept" onClick={handleSaveReply}>Done</button>
                 <button className="btn btn-sm" onClick={() => { setReplyText(resolution.proposedReply || ''); setEditingReply(false); }}>Cancel</button>
               </div>
             </div>
           ) : (
             <div
               style={{ fontSize: 13, padding: '6px 8px', background: 'rgba(0,0,0,0.15)', borderRadius: 4, cursor: 'pointer' }}
-              onClick={() => !isAccepted || setEditingReply(true)}
-              title={isAccepted ? 'Click to edit reply' : ''}
+              onClick={() => setEditingReply(true)}
+              title="Click to edit reply"
             >
               <Markdown>{replyText}</Markdown>
             </div>
@@ -136,27 +151,28 @@ function ResolutionBanner({ resolution, onAction, feedbackId }) {
 
       {!isPosted && (
         <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
-          {!isAccepted && !isRejected && (resolution.verdict === 'resolved' || resolution.verdict === 'partially-addressed') && (
+          {!isDismissed && (resolution.verdict === 'resolved' || resolution.verdict === 'partially-addressed') && (
             <>
-              <button className="btn btn-sm btn-accept" onClick={handleAccept}>Accept Resolution</button>
-              <button className="btn btn-sm btn-reject" onClick={handleReject}>Reject</button>
-              <button className="btn btn-sm" onClick={() => setEditingReply(true)}>Edit Reply</button>
-            </>
-          )}
-          {isAccepted && (
-            <>
-              <button className="btn btn-sm btn-accept" onClick={handlePost} disabled={posting}>
-                {posting ? 'Posting…' : 'Post to ADO'}
+              <button className="btn btn-sm btn-accept" onClick={handleAcceptAndReply} disabled={!!activeAction}>
+                {activeAction === 'acceptReply' ? 'Posting…' : 'Resolve & Reply'}
               </button>
+              <button className="btn btn-sm btn-accept" onClick={handleAccept} disabled={!!activeAction} title="Resolve thread in ADO without posting a reply">
+                {activeAction === 'accept' ? 'Resolving…' : 'Resolve'}
+              </button>
+              <button className="btn btn-sm" onClick={handleDismiss} disabled={!!activeAction}>Dismiss</button>
               <button className="btn btn-sm" onClick={() => setEditingReply(true)}>Edit Reply</button>
-              <button className="btn btn-sm btn-reject" onClick={handleReject}>Undo</button>
             </>
           )}
-          {isRejected && (
+          {isDismissed && (
             <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-              Rejected — <button className="btn btn-sm" onClick={handleAccept} style={{ fontSize: 11 }}>undo</button>
+              Dismissed — <button className="btn btn-sm" onClick={handleUndo} style={{ fontSize: 11 }}>undo</button>
             </span>
           )}
+        </div>
+      )}
+      {error && (
+        <div style={{ color: '#f44', fontSize: 12, marginTop: 6, padding: '4px 8px', background: 'rgba(255,68,68,0.1)', borderRadius: 4 }}>
+          ⚠ {error}
         </div>
       )}
     </div>
@@ -383,10 +399,24 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, curr
             </span>
           )}
         </div>
-        <span className={`badge status-${item.status}`}>
-          {item.status}
-          {isPosted && item.adoThreadId && ` #${item.adoThreadId}`}
-        </span>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+          <span className={`badge status-${item.status}`}>
+            {item.status}
+            {isPosted && item.adoThreadId && ` #${item.adoThreadId}`}
+          </span>
+          {isPosted && item.adoThreadStatus && (
+            <span className={`badge status-ado-${item.adoThreadStatus}`} title="ADO thread status">
+              {item.adoThreadStatus === 'active' ? '💬 Active' :
+               item.adoThreadStatus === 'fixed' ? '✓ Fixed' :
+               item.adoThreadStatus === 'closed' ? '✓ Closed' :
+               item.adoThreadStatus === 'wontFix' ? '✕ Won\'t Fix' :
+               item.adoThreadStatus === 'byDesign' ? '✓ By Design' :
+               item.adoThreadStatus === 'pending' ? '⏳ Pending' :
+               item.adoThreadStatus === 'unknown' ? '? Unknown' :
+               item.adoThreadStatus}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Edit history */}
@@ -542,19 +572,25 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, curr
       <div className="feedback-actions">
         <div className="feedback-decision-section">
           <div className="feedback-decision-buttons">
-            {Object.entries(DECISION_CONFIG).map(([decision, config]) => (
-              <button
-                key={decision}
-                className={`btn btn-sm ${config.buttonClass} ${activeDecision === decision ? 'is-selected' : ''}`}
-                onClick={() => {
-                  if (!isActionable || submittingDecision) return;
-                  setSelectedDecision(decision);
-                }}
-                disabled={decisionButtonsDisabled}
-              >
-                {config.icon} {config.label}
-              </button>
-            ))}
+            {isActionable ? (
+              Object.entries(DECISION_CONFIG).map(([decision, config]) => (
+                <button
+                  key={decision}
+                  className={`btn btn-sm ${config.buttonClass} ${activeDecision === decision ? 'is-selected' : ''}`}
+                  onClick={() => {
+                    if (submittingDecision) return;
+                    setSelectedDecision(decision);
+                  }}
+                  disabled={submittingDecision}
+                >
+                  {config.icon} {config.label}
+                </button>
+              ))
+            ) : persistedDecision && DECISION_CONFIG[persistedDecision] ? (
+              <span className="feedback-decision-label" style={{ color: DECISION_CONFIG[persistedDecision].labelColor }}>
+                {DECISION_CONFIG[persistedDecision].icon} {DECISION_CONFIG[persistedDecision].pastLabel}
+              </span>
+            ) : null}
           </div>
           {isActionable && selectedDecision && (
             <div className="feedback-decision-form">
@@ -617,7 +653,7 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, curr
           </div>
         )}
         {isPosted && (
-          <span style={{ fontSize: 12, color: 'var(--text-muted)', padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', padding: '3px 0', display: 'flex', alignItems: 'center', gap: 4 }}>
             <IconCheck /> Posted to ADO
           </span>
         )}

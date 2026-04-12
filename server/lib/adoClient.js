@@ -157,6 +157,32 @@ export async function getPRThreadComments(repoName, prId, threadId) {
   return result.value || [];
 }
 
+const ADO_THREAD_STATUS = { 0: 'unknown', 1: 'active', 2: 'fixed', 3: 'wontFix', 4: 'closed', 5: 'byDesign', 6: 'pending' };
+
+/** Get a single PR thread (includes status, properties, context) */
+export async function getPRThread(repoName, prId, threadId) {
+  const { org, project } = await getConfig();
+  const base = apiBase(org, project);
+  const url = `${base}/git/repositories/${repoName}/pullRequests/${prId}/threads/${threadId}?api-version=7.1`;
+
+  const response = await fetch(url, {
+    headers: { 'Authorization': await authHeader() },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    const err = new Error(parseAdoError(response.status, errorText));
+    err.statusCode = response.status;
+    throw err;
+  }
+
+  const thread = await response.json();
+  const statusName = typeof thread.status === 'number'
+    ? (ADO_THREAD_STATUS[thread.status] || 'unknown')
+    : (thread.status || 'unknown');
+  return { ...thread, statusName };
+}
+
 export async function getPRIterations(repoName, prId) {
   const { org, project } = await getConfig();
   const base = apiBase(org, project);

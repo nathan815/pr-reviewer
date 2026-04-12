@@ -217,7 +217,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched, filterTypes
                       if (showRelaunchFor !== agent.key) {
                         setRelaunchPrompt(p => ({
                           ...p,
-                          [agent.key]: 'The last review run exited prematurely. Resume the review of this PR from where it left off.',
+                          [agent.key]: '',
                         }));
                       }
                       setShowRelaunchFor(showRelaunchFor === agent.key ? null : agent.key);

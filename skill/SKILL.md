@@ -249,6 +249,16 @@ Overall risk: {risk level}
 
 When the user's prompt includes instructions for re-review (e.g., "check resolutions", "re-review", or "review again"), follow this flow instead of a full initial review.
 
+**⚠️ CRITICAL RULES FOR RE-REVIEW:**
+- **DO NOT post anything to ADO directly.** No calling `repo_update_pull_request_thread`, `reply_to_comment`, `create_pull_request_thread`, or any ADO write tool.
+- **DO NOT modify ANY existing feedback files** — do not edit `feedback.json` or any `feedback-*.json`. Do not change feedback item statuses. Only the web UI can change statuses.
+- **DO NOT create or edit files** except the ones specified below:
+  - `resolutions-{timestamp}.json` (ALWAYS create this — it's the whole point)
+  - `feedback-{timestamp}.json` (ONLY in full re-review mode, for NEW feedback items only)
+  - `metadata.json` (update commitSha and reviewedAt only)
+- **ONLY write the `resolutions-{timestamp}.json` file** for resolution proposals. The web UI will show the user your proposals and let them accept/reject/post individually.
+- The user MUST approve each resolution before it gets posted to ADO. This is the entire point of the re-review feature.
+
 ### Re-Review Step 1: Determine mode
 The user prompt may specify one of:
 - **Check resolutions only** — only check existing feedback items against current code
@@ -256,19 +266,17 @@ The user prompt may specify one of:
 
 If unclear, default to "check resolutions only".
 
-### Re-Review Step 2: Sync worktree
-Before checking resolutions, ensure the worktree is up to date:
-```powershell
-cd "$HOME\pr-reviews\{repo}\{prId}\worktree"
-git fetch origin
-git reset --hard origin/{sourceBranch}
-$newCommit = git rev-parse HEAD
-```
+### Re-Review Step 2: Available tools
+The server syncs the worktree before launching you. Your available tools are:
+- **`view`** / **`read`** / **`grep`** / **`glob`** — use these for reading files, searching code, listing directories
+- **`git show`** / **`git diff`** / **`git log`** — read-only git commands (via shell) for comparing code at different commits
+- **`write`/`create`** — ONLY for `resolutions-*.json`, `metadata.json` (and `feedback-*.json` in full re-review mode)
+- **Shell is restricted** — only `git show`, `git diff`, `git log` are allowed. Do NOT use PowerShell commands like `Get-Content`, `Test-Path`, `Get-ChildItem`, etc. Use `view` and `glob` instead.
 
 ### Re-Review Step 3: Read existing feedback
-```powershell
-$feedbackFiles = Get-ChildItem "$HOME\pr-reviews\{repo}\{prId}\feedback-*.json"
-```
+Use `glob` to find feedback files, then `view` to read them:
+- `glob("feedback*.json")` in `~/pr-reviews/{repo}/{prId}/` to find all feedback files
+- `view` each file to read the feedback items
 Parse all feedback items from these files. For each item, note:
 - `id`, `file`, `startLine`, `endLine`, `commitSha` (the original review commit)
 - `title`, `comment`, `suggestion` (what was flagged)
@@ -277,24 +285,23 @@ Parse all feedback items from these files. For each item, note:
 
 ### Re-Review Step 4: Compare old vs new code for each feedback item
 For each feedback item that has `status` of `accepted` or `posted`:
-1. Get the **original code** at the feedback's `commitSha`:
-   ```powershell
-   git show {commitSha}:{file} | Select-Object -Index ({startLine-1}..{endLine-1})
-   ```
-2. Get the **current code** at the same location:
-   ```powershell
-   # Use grep -n to find the same code region in the current version
-   grep -n "unique pattern from original code" {file}
-   ```
-3. Also check the full diff for that file between old and new:
-   ```powershell
-   git diff {commitSha}..HEAD -- {file}
-   ```
-4. Determine if the feedback was addressed:
+
+1. Read the **current code** from the worktree at the feedback's file/line range:
+   - Use `git show HEAD:{file}` or `view` the worktree file: `~/pr-reviews/{repo}/{prId}/worktree/{file}`
+2. Read the **original code at review time** — use ONE of these approaches:
+   - **Preferred**: `git show {commitSha}:{file}` in the worktree to see the code at the original review commit
+   - **Alternative**: Read cached diff files at `~/pr-reviews/{repo}/{prId}/diffs/{commitSha prefix}/`
+     - Filename format: path with `/` replaced by `__` and `.json` appended (e.g., `src/Foo/Bar.cs` → `src__Foo__Bar.cs.json`)
+     - Each diff JSON contains: `oldSource` (base branch), `newSource` (PR code at review time), `diffText` (unified diff)
+3. Compare the original code against the current code to see what changed
+4. Also check the ADO thread replies (in `adoReplies` field) — the author may have explained what they changed
+5. Determine if the feedback was addressed:
    - **resolved**: The specific issue raised in the feedback has been fixed
    - **partially-addressed**: Some aspect was fixed but the core concern remains
    - **still-open**: The code is unchanged or the issue was not addressed
    - **cant-determine**: Cannot tell (e.g., file was deleted, moved, or heavily refactored)
+
+> **Note**: You have read-only git access (`git show`, `git diff`, `git log`). Destructive git commands (push, checkout, reset, etc.) are blocked.
 
 ### Re-Review Step 5: Write resolutions file
 Write to `~/pr-reviews/{repo}/{prId}/resolutions-{timestamp}.json`:
@@ -333,6 +340,8 @@ Generate the filename using the current UTC time: `resolutions-{YYYYMMDD}T{HHMMS
 - `proposedThreadStatus` should be `"Fixed"` for resolved items, `null` for still-open items
 - Be honest about confidence — if the change is ambiguous, say `"medium"` or `"low"`
 
+**After writing this file, you are DONE with resolutions. Do NOT post to ADO. Do NOT modify feedback.json statuses. The user will review proposals in the web UI and decide which to accept and post.**
+
 ### Re-Review Step 6: New feedback (full re-review mode only)
 If the mode is "full re-review", also:
 1. Review all changed files between the previous review commit and the current HEAD
@@ -341,10 +350,7 @@ If the mode is "full re-review", also:
 4. Do NOT duplicate issues that are already covered by existing feedback items
 
 ### Re-Review Step 7: Update metadata
-Update `metadata.json` with the new commit SHA and review timestamp:
-```powershell
-# Read existing metadata, update commitSha and reviewedAt
-```
+Read `~/pr-reviews/{repo}/{prId}/metadata.json` with the `view` tool, then write it back with the `edit` tool to update `commitSha` and `reviewedAt`.
 Also set `firstReviewedAt` if it doesn't already exist (preserve the original review date).
 
 ### Re-Review Step 8: Summarize

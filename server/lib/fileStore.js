@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import { execFileSync } from 'child_process';
 import path from 'path';
 import os from 'os';
-import { getPRThreadComments, getPRDetails, getPRIterations } from './adoClient.js';
+import { getPRThreadComments, getPRThread, getPRDetails, getPRIterations } from './adoClient.js';
 
 const REVIEWS_ROOT = path.join(os.homedir(), 'pr-reviews');
 const LEARNINGS_DIR = path.join(REVIEWS_ROOT, '.learnings');
@@ -242,6 +242,14 @@ export async function markFeedbackPosted(repo, prId, feedbackId, adoThreadId) {
   });
 }
 
+/** Update feedback item's ADO thread status */
+export async function updateFeedbackAdoThreadStatus(repo, prId, feedbackId, threadStatus) {
+  const dir = reviewDir(repo, prId);
+  return updateFeedbackItem(dir, feedbackId, (item) => {
+    item.adoThreadStatus = (threadStatus || 'unknown').toLowerCase();
+  });
+}
+
 /** Batch update: set multiple feedback items to a status */
 export async function batchUpdateFeedbackStatus(repo, prId, feedbackIds, newStatus) {
   const dir = reviewDir(repo, prId);
@@ -427,8 +435,22 @@ export async function syncWorktree(repo, prId) {
   const worktreePath = path.join(dir, 'worktree');
   const metadata = await readJson(path.join(dir, 'metadata.json'));
 
+  // Fetch PR details from ADO to fill in any missing metadata
+  let prDetails;
+  try {
+    prDetails = await getPRDetails(repo, prId);
+  } catch { /* ADO unreachable, proceed with what we have */ }
+
+  const metaUpdates = {};
+  if (prDetails) {
+    if (!metadata.title || metadata.title === `PR #${prId}`) metaUpdates.title = prDetails.title;
+    if (!metadata.author) metaUpdates.author = prDetails.createdBy?.uniqueName || prDetails.createdBy?.displayName || '';
+    if (!metadata.sourceBranch) metaUpdates.sourceBranch = prDetails.sourceRefName?.replace('refs/heads/', '') || '';
+    if (!metadata.targetBranch) metaUpdates.targetBranch = prDetails.targetRefName?.replace('refs/heads/', '') || '';
+  }
+
+  const sourceBranch = normalizeBranchRef(metaUpdates.sourceBranch || metadata.sourceBranch);
   const oldCommit = metadata.commitSha;
-  const sourceBranch = normalizeBranchRef(metadata.sourceBranch);
 
   // Fetch latest from origin
   runGit(worktreePath, ['fetch', 'origin']);
@@ -439,8 +461,8 @@ export async function syncWorktree(repo, prId) {
   const newCommit = runGit(worktreePath, ['rev-parse', 'HEAD']);
   const updated = oldCommit !== newCommit;
 
-  if (updated) {
-    await updateMetadata(repo, prId, { commitSha: newCommit });
+  if (updated || Object.keys(metaUpdates).length > 0) {
+    await updateMetadata(repo, prId, { ...metaUpdates, commitSha: newCommit });
   }
 
   return { oldCommit, newCommit, updated };
@@ -504,7 +526,8 @@ export async function readResolutions(repo, prId) {
   const resFiles = files.filter(f => f.startsWith('resolutions-') && f.endsWith('.json')).sort();
   if (!resFiles.length) return null;
 
-  const latest = await readJson(path.join(dir, resFiles[resFiles.length - 1]));
+  let latest;
+  try { latest = await readJson(path.join(dir, resFiles[resFiles.length - 1])); } catch { return null; }
   return { ...latest, fileName: resFiles[resFiles.length - 1] };
 }
 
@@ -517,7 +540,8 @@ export async function readAllResolutions(repo, prId) {
 
   const merged = new Map();
   for (const f of resFiles) {
-    const data = await readJson(path.join(dir, f));
+    let data;
+    try { data = await readJson(path.join(dir, f)); } catch { continue; }
     if (!data?.proposals) continue;
     for (const p of data.proposals) {
       merged.set(p.feedbackId, { ...p, sourceFile: f, commitSha: data.commitSha });
@@ -820,9 +844,12 @@ export async function syncAdoReplies(repo, prId, feedbackId = null) {
   let imported = 0;
 
   for (const item of postedItems) {
-    let comments;
+    let comments, thread;
     try {
-      comments = await getPRThreadComments(repo, prId, item.adoThreadId);
+      [comments, thread] = await Promise.all([
+        getPRThreadComments(repo, prId, item.adoThreadId),
+        getPRThread(repo, prId, item.adoThreadId),
+      ]);
     } catch {
       continue;
     }
@@ -831,9 +858,10 @@ export async function syncAdoReplies(repo, prId, feedbackId = null) {
       .filter(comment => comment.parentCommentId && comment.parentCommentId !== 0 && comment.content?.trim())
       .map(normalizeAdoReply);
 
-    if (replies.length === 0) continue;
-
     const result = await updateFeedbackItem(dir, item.id, current => {
+      // Update ADO thread status
+      current.adoThreadStatus = thread.statusName || 'unknown';
+
       const existingById = new Map((current.adoReplies || []).map(reply => [reply.commentId, reply]));
       const newReplies = [];
 

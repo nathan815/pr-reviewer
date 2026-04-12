@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import os from 'os';
-import { writeReview, getReview, addDiscussionMessage, updateFeedbackContent } from './fileStore.js';
+import { writeReview, getReview, addDiscussionMessage, updateFeedbackContent, updateMetadata } from './fileStore.js';
 import fs from 'fs/promises';
 import { readConfig, writeConfig } from './config.js';
 
@@ -46,13 +46,39 @@ export function parsePrUrl(url) {
   return null;
 }
 
+/** Build --allow-tool args for re-review mode */
+function buildReReviewToolArgs() {
+
+  const args = [
+    // Read-only tools
+    '--allow-tool=read',
+    '--allow-tool=grep',
+    '--allow-tool=glob',
+    '--allow-tool=view',
+
+    // Write tools (unscoped — scoped write patterns are broken for file creation,
+    // and deny-tool=write(feedback*) poisons ALL writes due to a Copilot CLI bug.
+    // Prompt-level guardrails in SKILL.md prevent writing feedback files in re-review mode.)
+    '--allow-tool=write',
+
+    // Read-only git commands
+    `--allow-tool=shell(git show:*)`,
+    `--allow-tool=shell(git diff:*)`,
+    `--allow-tool=shell(git log:*)`,
+
+    '--no-ask-user',
+  ];
+
+  return args;
+}
+
 /** Build the command + args from config, substituting {{prUrl}} and appending extra prompt */
 async function buildCommand(prUrl, extraPrompt, reReviewMode) {
   const config = await readConfig();
   const profile = config.profiles?.[config.activeProfile] || config.reviewCommand;
 
   const program = profile.program;
-  const args = profile.args.map(a => {
+  let args = profile.args.map(a => {
     let val = a.replace(/\{\{prUrl\}\}/g, prUrl);
     // Append re-review mode instructions
     if (reReviewMode && a.includes('{{prUrl}}')) {
@@ -68,6 +94,17 @@ async function buildCommand(prUrl, extraPrompt, reReviewMode) {
     }
     return val;
   });
+
+  // For re-review modes, restrict tools
+  if (reReviewMode) {
+    // Strip yolo / allow-all flags
+    args = args.filter(a =>
+      a !== '--yolo' && a !== '--allow-all' && a !== '--allow-all-tools' && a !== '--allow-all-paths'
+      && !a.startsWith('--allow-tool') && !a.startsWith('--deny-tool')
+    );
+    args.push(...buildReReviewToolArgs());
+  }
+
   return { program, args, profileName: config.activeProfile || 'default' };
 }
 
@@ -100,15 +137,27 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
     }
   }
 
-  // Write initial metadata with agent_review_requested status
+  // Update metadata — merge with existing to preserve commitSha, title, etc.
+  const prDir = path.join(REVIEWS_ROOT, repo, String(prId));
+  let existingMeta = {};
+  try {
+    existingMeta = JSON.parse(await fs.readFile(path.join(prDir, 'metadata.json'), 'utf-8'));
+  } catch { /* no existing metadata, start fresh */ }
+
+  const freshMeta = {
+    prId,
+    repo,
+    title: `PR #${prId}`,
+    author: '',
+    sourceBranch: '',
+    targetBranch: '',
+    url: prUrl,
+  };
+  // Use existing values as base, overlay defaults only for missing fields, then set launch fields
   await writeReview(repo, prId, {
     metadata: {
-      prId,
-      repo,
-      title: `PR #${prId}`,
-      author: '',
-      sourceBranch: '',
-      targetBranch: '',
+      ...freshMeta,
+      ...existingMeta,
       url: prUrl,
       reviewedAt: new Date().toISOString(),
       status: 'agent_review_requested',
@@ -116,7 +165,6 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
   });
 
   // Back up overview.md before agent run (agent will merge into it)
-  const prDir = path.join(REVIEWS_ROOT, repo, String(prId));
   const overviewPath = path.join(prDir, 'overview.md');
   try {
     await fs.access(overviewPath);
@@ -137,6 +185,15 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
   let stderr = '';
   child.stdout.on('data', d => { stdout += d.toString(); });
   child.stderr.on('data', d => { stderr += d.toString(); });
+
+  // Periodically persist output so a server restart doesn't lose it
+  let lastPersistedLen = 0;
+  const persistInterval = setInterval(async () => {
+    if (stdout.length > lastPersistedLen) {
+      lastPersistedLen = stdout.length;
+      await persistAgentState(agentInfo).catch(() => {});
+    }
+  }, 15_000);
 
   // Write lockfile
   const lockData = {
@@ -166,16 +223,22 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
   await persistAgentState(agentInfo);
 
   child.on('close', async (code) => {
+    clearInterval(persistInterval);
     agentInfo.status = code === 0 ? 'completed' : 'failed';
     agentInfo.exitCode = code;
     agentInfo.completedAt = new Date().toISOString();
     removeLock(lockPath).catch(() => {});
     await persistAgentState(agentInfo);
-    if (code !== 0) await markMetadataFailed(repo, prId, `Agent exited with code ${code}`);
+    if (code === 0) {
+      await updateMetadata(repo, prId, { status: 'agent_review_done' }).catch(() => {});
+    } else {
+      await markMetadataFailed(repo, prId, `Agent exited with code ${code}`);
+    }
     console.log(`[agent] Review of ${key} ${agentInfo.status} (exit ${code})`);
   });
 
   child.on('error', async (err) => {
+    clearInterval(persistInterval);
     agentInfo.status = 'failed';
     agentInfo.error = err.message;
     agentInfo.completedAt = new Date().toISOString();

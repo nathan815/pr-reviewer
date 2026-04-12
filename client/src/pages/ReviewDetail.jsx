@@ -19,7 +19,8 @@ export default function ReviewDetail() {
   const [relaunching, setRelaunching] = useState(false);
   const [showRelaunchPrompt, setShowRelaunchPrompt] = useState(false);
   const [relaunchText, setRelaunchText] = useState('');
-  const [relaunchMode, setRelaunchMode] = useState('full');
+  const [relaunchMode, setRelaunchMode] = useState('re-review');
+  const [syncBeforeRelaunch, setSyncBeforeRelaunch] = useState(true);
   const [activeFile, setActiveFile] = useState(null);
   const [adoInfo, setAdoInfo] = useState(null);
   const [lockInfo, setLockInfo] = useState(null);
@@ -280,6 +281,15 @@ export default function ReviewDetail() {
     if (!review?.metadata?.url) return;
     setRelaunching(true);
     try {
+      // Sync worktree first if requested
+      if (syncBeforeRelaunch) {
+        const syncRes = await fetch(`/api/reviews/${repo}/${prId}/sync`, { method: 'POST' });
+        if (syncRes.ok) {
+          const result = await syncRes.json();
+          setStaleness({ stale: false, localCommit: result.newCommit, remoteCommit: result.newCommit });
+          if (result.updated) loadReview();
+        }
+      }
       await fetch('/api/agent/launch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -300,34 +310,33 @@ export default function ReviewDetail() {
   };
 
   const handleResolutionAction = async (feedbackId, action, edits) => {
-    if (action === 'post') {
-      const res = await fetch(`/api/reviews/${repo}/${prId}/resolutions/${feedbackId}/post`, { method: 'POST' });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || 'Post failed');
-      }
+    let res;
+    if (action === 'post' || action === 'resolve-only') {
+      const endpoint = action === 'resolve-only' ? 'resolve-only' : 'post';
+      res = await fetch(`/api/reviews/${repo}/${prId}/resolutions/${feedbackId}/${endpoint}`, { method: 'POST' });
     } else {
-      await fetch(`/api/reviews/${repo}/${prId}/resolutions/${feedbackId}/${action}`, {
+      res = await fetch(`/api/reviews/${repo}/${prId}/resolutions/${feedbackId}/${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(edits || {}),
       });
     }
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      throw new Error(data?.error || `Action '${action}' failed`);
+    }
     loadReview();
   };
 
-  const acceptAllResolutions = async () => {
-    await fetch(`/api/reviews/${repo}/${prId}/resolutions-accept-all`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ verdicts: ['resolved'] }),
-    });
-    loadReview();
-  };
-
-  const postAllResolutions = async () => {
+  const resolveAllResolutions = async () => {
     setPosting(true);
     try {
+      // Accept all first, then resolve-only all
+      await fetch(`/api/reviews/${repo}/${prId}/resolutions-accept-all`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verdicts: ['resolved'] }),
+      });
       const res = await fetch(`/api/reviews/${repo}/${prId}/resolutions-post-accepted`, { method: 'POST' });
       const data = await res.json();
       setPostResult({ success: data.failed === 0, posted: data.posted, failed: data.failed });
@@ -347,8 +356,7 @@ export default function ReviewDetail() {
     }
   }
   const hasResolutions = Object.keys(resolutionMap).length > 0;
-  const resolvedCount = resolutions?.proposals?.filter(p => p.verdict === 'resolved').length || 0;
-  const acceptedResolutions = resolutions?.proposals?.filter(p => p.accepted === 'accepted' && !p.posted).length || 0;
+  const unpostedResolutions = resolutions?.proposals?.filter(p => (p.verdict === 'resolved' || p.verdict === 'partially-addressed') && !p.posted).length || 0;
 
   if (loading) return <div className="loading">Loading review</div>;
   if (!review) return <div className="empty-state">Review not found</div>;
@@ -485,7 +493,7 @@ export default function ReviewDetail() {
                 className="btn btn-rerun"
                 onClick={() => {
                   if (!showRelaunchPrompt && isFailed) {
-                    setRelaunchText('The last review run exited prematurely. Resume the review of this PR from where it left off.');
+                    setRelaunchText('');
                   }
                   setShowRelaunchPrompt(!showRelaunchPrompt);
                 }}
@@ -524,10 +532,14 @@ export default function ReviewDetail() {
                 onChange={e => setRelaunchMode(e.target.value)}
                 style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'inherit', fontSize: '0.85em' }}
               >
-                <option value="full">Full review (from scratch)</option>
-                <option value="re-review">Check resolutions only</option>
-                <option value="full-re-review">Re-review + new feedback</option>
+                <option value="full" style={{ background: '#1e1e1e', color: '#e0e0e0' }}>Full review (from scratch)</option>
+                <option value="re-review" style={{ background: '#1e1e1e', color: '#e0e0e0' }}>Check resolutions only</option>
+                <option value="full-re-review" style={{ background: '#1e1e1e', color: '#e0e0e0' }}>Re-review + new feedback</option>
               </select>
+              <label style={{ fontSize: '0.85em', display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
+                <input type="checkbox" checked={syncBeforeRelaunch} onChange={e => setSyncBeforeRelaunch(e.target.checked)} />
+                Sync first
+              </label>
             </div>
             <textarea
               className="instructions-editor"
@@ -539,7 +551,7 @@ export default function ReviewDetail() {
             />
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-post" onClick={handleRelaunch} disabled={relaunching}>
-                {relaunching ? 'Launching…' : 'Launch'}
+                {relaunching ? (syncBeforeRelaunch ? 'Syncing & Reviewing…' : 'Reviewing…') : 'Review'}
               </button>
               <button className="btn" onClick={() => { setShowRelaunchPrompt(false); setRelaunchText(''); }}>Cancel</button>
             </div>
@@ -630,14 +642,9 @@ export default function ReviewDetail() {
               {hasResolutions && (
                 <>
                   <span style={{ borderLeft: '1px solid var(--border)', height: 20, margin: '0 4px' }} />
-                  {resolvedCount > 0 && (
-                    <button className="btn btn-sm" onClick={acceptAllResolutions} disabled={resolvedCount === 0}>
-                      <IconCheck /> Accept {resolvedCount} Resolved
-                    </button>
-                  )}
-                  {acceptedResolutions > 0 && (
-                    <button className="btn btn-sm btn-post" onClick={postAllResolutions} disabled={posting || acceptedResolutions === 0}>
-                      <IconSend /> Post {acceptedResolutions} Resolutions
+                  {unpostedResolutions > 0 && (
+                    <button className="btn btn-sm" onClick={resolveAllResolutions} disabled={posting}>
+                      <IconCheck /> Resolve All ({unpostedResolutions})
                     </button>
                   )}
                 </>

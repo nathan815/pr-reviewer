@@ -97,6 +97,15 @@ a:hover { text-decoration: underline; }
 .status-rejected { background: rgba(139,148,158,0.15); color: var(--text-muted); }
 .status-posted { background: rgba(63,185,80,0.15); color: var(--green); }
 
+/* ADO thread status badges */
+.status-ado-active { background: rgba(210,153,34,0.15); color: var(--orange); }
+.status-ado-fixed,
+.status-ado-closed,
+.status-ado-byDesign { background: rgba(63,185,80,0.15); color: var(--green); }
+.status-ado-wontFix { background: rgba(139,148,158,0.15); color: var(--text-muted); }
+.status-ado-pending { background: rgba(88,166,255,0.15); color: var(--accent); }
+.status-ado-unknown { background: rgba(139,148,158,0.1); color: var(--text-muted); }
+
 /* PR status badges */
 .status-pr-active { background: rgba(88,166,255,0.15); color: var(--accent); }
 .status-pr-completed { background: rgba(63,185,80,0.15); color: var(--green); }
@@ -127,6 +136,11 @@ a:hover { text-decoration: underline; }
 .btn-reject { border-color: var(--red); color: var(--red); }
 .btn-reject:hover { background: rgba(248,81,73,0.15); }
 .btn-reject.is-selected { background: rgba(248,81,73,0.15); }
+
+.feedback-decision-label {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 600; padding: 3px 0;
+}
 .btn-post { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn-post:hover { background: #4090e0; }
 .feedback-decision-buttons .btn:disabled {

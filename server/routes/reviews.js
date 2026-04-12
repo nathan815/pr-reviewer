@@ -19,6 +19,7 @@ import {
   readAllResolutions,
   updateResolutionStatus,
   markResolutionPosted,
+  updateFeedbackAdoThreadStatus,
 } from '../lib/fileStore.js';
 import { getPRDetails, replyToThread, updateThreadStatus } from '../lib/adoClient.js';
 import { launchCurationAgent, getCurationStatus, launchDiscussionAgent, getDiscussionStatus } from '../lib/agentLauncher.js';
@@ -246,6 +247,7 @@ reviewsRouter.get('/:repo/:prId/feedback/:feedbackId/ado-thread', async (req, re
     res.json({
       feedbackId: item.id,
       adoThreadId: item.adoThreadId || null,
+      adoThreadStatus: item.adoThreadStatus || null,
       status: item.status,
       replies: item.adoReplies || [],
     });
@@ -291,8 +293,9 @@ reviewsRouter.post('/:repo/:prId/resolutions/:feedbackId/post', async (req, res)
     const threadStatus = proposal.proposedThreadStatus || 'fixed';
     await updateThreadStatus(repo, prId, item.adoThreadId, threadStatus);
 
-    // Mark as posted locally
+    // Mark as posted locally and update ADO thread status
     await markResolutionPosted(repo, prId, feedbackId);
+    await updateFeedbackAdoThreadStatus(repo, prId, feedbackId, threadStatus);
 
     res.json({ success: true, threadId: item.adoThreadId, status: threadStatus });
   } catch (err) {
@@ -300,15 +303,43 @@ reviewsRouter.post('/:repo/:prId/resolutions/:feedbackId/post', async (req, res)
   }
 });
 
-// Accept or reject a resolution proposal
+// Resolve ADO thread without posting a reply comment
+reviewsRouter.post('/:repo/:prId/resolutions/:feedbackId/resolve-only', async (req, res) => {
+  try {
+    const { repo, prId, feedbackId } = req.params;
+    const { proposals } = await readAllResolutions(repo, prId);
+    const proposal = proposals.find(p => p.feedbackId === feedbackId);
+    if (!proposal) return res.status(404).json({ error: 'Resolution proposal not found' });
+    if (proposal.posted) return res.status(409).json({ error: 'Already posted' });
+
+    const review = await getReview(repo, prId);
+    const item = review.feedback.items.find(i => i.id === feedbackId);
+    if (!item?.adoThreadId) return res.status(400).json({ error: 'Feedback has no ADO thread to resolve' });
+
+    // Only update thread status — no reply
+    const threadStatus = proposal.proposedThreadStatus || 'fixed';
+    await updateThreadStatus(repo, prId, item.adoThreadId, threadStatus);
+
+    // Mark as posted locally and update ADO thread status
+    await markResolutionPosted(repo, prId, feedbackId);
+    await updateFeedbackAdoThreadStatus(repo, prId, feedbackId, threadStatus);
+
+    res.json({ success: true, threadId: item.adoThreadId, status: threadStatus });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+// Accept, dismiss, or undismiss a resolution proposal
 reviewsRouter.post('/:repo/:prId/resolutions/:feedbackId/:action', async (req, res) => {
   try {
     const { repo, prId, feedbackId, action } = req.params;
-    if (action !== 'accept' && action !== 'reject') {
-      return res.status(400).json({ error: 'Action must be accept or reject' });
+    const statusMap = { accept: 'accepted', dismiss: 'dismissed', undismiss: null };
+    if (!(action in statusMap)) {
+      return res.status(400).json({ error: 'Action must be accept, dismiss, or undismiss' });
     }
     const edits = req.body || {};
-    const result = await updateResolutionStatus(repo, prId, feedbackId, action === 'accept' ? 'accepted' : 'rejected', edits);
+    const result = await updateResolutionStatus(repo, prId, feedbackId, statusMap[action], edits);
     if (!result) return res.status(404).json({ error: 'Resolution proposal not found' });
     res.json(result);
   } catch (err) {
