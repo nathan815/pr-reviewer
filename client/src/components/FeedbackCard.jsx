@@ -72,7 +72,7 @@ function buildAdoFileUrl(prUrl, filePath, startLine, endLine) {
   }
 }
 
-export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAccept, onNote, onReject, onReset, onPost, onItemUpdated }) {
+export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, currentCommitSha, onAccept, onNote, onReject, onReset, onPost, onItemUpdated }) {
   const [postingThis, setPostingThis] = useState(false);
   const [error, setError] = useState(null);
   const [noteText, setNoteText] = useState('');
@@ -306,6 +306,7 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, onAc
           startLine={item.startLine}
           endLine={item.endLine}
           commitSha={item.commitSha}
+          currentCommitSha={currentCommitSha}
         />
       )}
 

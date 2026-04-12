@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import { execFileSync } from 'child_process';
 import path from 'path';
 import os from 'os';
-import { getPRThreadComments } from './adoClient.js';
+import { getPRThreadComments, getPRDetails, getPRIterations } from './adoClient.js';
 
 const REVIEWS_ROOT = path.join(os.homedir(), 'pr-reviews');
 const LEARNINGS_DIR = path.join(REVIEWS_ROOT, '.learnings');
@@ -330,13 +330,20 @@ export async function readFileAtCommit(repo, prId, filePath, commitSha) {
   return fs.readFile(path.join(worktreePath, filePath), 'utf-8');
 }
 
-/** Build diff/source payload for a file in the PR worktree */
+/** Build diff/source payload for a file in the PR worktree (with disk cache) */
 export async function getFileDiff(repo, prId, filePath, commitSha, contextLines = 3) {
   const dir = reviewDir(repo, prId);
   const worktreePath = path.join(dir, 'worktree');
   const metadata = await readJson(path.join(dir, 'metadata.json'));
 
   const headRef = resolveHeadRef(worktreePath, commitSha || metadata.commitSha);
+
+  // Check disk cache first
+  if (headRef) {
+    const cached = await readDiffCache(dir, headRef, filePath);
+    if (cached) return cached;
+  }
+
   const baseRef = resolveBaseRef(worktreePath, metadata.targetBranch, headRef);
 
   const oldSourceFromBase = readGitFile(worktreePath, baseRef, filePath) ?? '';
@@ -367,7 +374,7 @@ export async function getFileDiff(repo, prId, filePath, commitSha, contextLines 
       ) || ''
     : '';
 
-  return {
+  const result = {
     path: filePath,
     headRef,
     baseRef,
@@ -376,6 +383,116 @@ export async function getFileDiff(repo, prId, filePath, commitSha, contextLines 
     diffText,
     baseUnavailable: !baseRef,
   };
+
+  // Write to disk cache
+  if (headRef) {
+    await writeDiffCache(dir, headRef, filePath, result);
+  }
+
+  return result;
+}
+
+// --- Diff disk cache helpers ---
+
+function diffCachePath(dir, commitSha, filePath) {
+  // Replace path separators to create a flat cache key
+  const safeFile = filePath.replace(/[/\\]/g, '__');
+  return path.join(dir, 'diffs', commitSha.slice(0, 12), safeFile + '.json');
+}
+
+async function readDiffCache(dir, commitSha, filePath) {
+  try {
+    const cachePath = diffCachePath(dir, commitSha, filePath);
+    const raw = await fs.readFile(cachePath, 'utf-8');
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function writeDiffCache(dir, commitSha, filePath, data) {
+  try {
+    const cachePath = diffCachePath(dir, commitSha, filePath);
+    await fs.mkdir(path.dirname(cachePath), { recursive: true });
+    await fs.writeFile(cachePath, JSON.stringify(data));
+  } catch {
+    // Cache write failure is non-fatal
+  }
+}
+
+// --- Worktree sync ---
+
+export async function syncWorktree(repo, prId) {
+  const dir = reviewDir(repo, prId);
+  const worktreePath = path.join(dir, 'worktree');
+  const metadata = await readJson(path.join(dir, 'metadata.json'));
+
+  const oldCommit = metadata.commitSha;
+  const sourceBranch = normalizeBranchRef(metadata.sourceBranch);
+
+  // Fetch latest from origin
+  runGit(worktreePath, ['fetch', 'origin']);
+
+  // Reset to latest origin/{branch} — handles rebases cleanly
+  runGit(worktreePath, ['reset', '--hard', `origin/${sourceBranch}`]);
+
+  const newCommit = runGit(worktreePath, ['rev-parse', 'HEAD']);
+  const updated = oldCommit !== newCommit;
+
+  if (updated) {
+    await updateMetadata(repo, prId, { commitSha: newCommit });
+  }
+
+  return { oldCommit, newCommit, updated };
+}
+
+// --- Staleness check ---
+
+export async function checkStaleness(repo, prId) {
+  const dir = reviewDir(repo, prId);
+  const metadata = await readJson(path.join(dir, 'metadata.json'));
+  const localCommit = metadata.commitSha;
+  const checkedAt = new Date().toISOString();
+
+  try {
+    const [pr, iterations] = await Promise.all([
+      getPRDetails(repo, prId),
+      getPRIterations(repo, prId),
+    ]);
+    const remoteCommit = pr.lastMergeSourceCommit?.commitId || null;
+    const stale = remoteCommit && localCommit !== remoteCommit;
+
+    // Find which iteration matches our local commit, count updates since
+    let updatesBehind = null;
+    if (stale && iterations.length) {
+      const localIdx = iterations.findIndex(it => it.sourceRefCommit?.commitId === localCommit);
+      if (localIdx >= 0) {
+        updatesBehind = iterations.length - 1 - localIdx;
+      }
+    }
+
+    return {
+      stale: !!stale,
+      localCommit,
+      remoteCommit,
+      updatesBehind,
+      totalIterations: iterations.length,
+      checkedAt,
+      prUpdatedAt: pr.lastMergeSourceCommit?.committer?.date || null,
+      reviewedAt: metadata.reviewedAt || null,
+      firstReviewedAt: metadata.firstReviewedAt || metadata.reviewedAt || null,
+    };
+  } catch (err) {
+    return {
+      stale: false,
+      localCommit,
+      remoteCommit: null,
+      checkedAt,
+      reviewedAt: metadata.reviewedAt || null,
+      firstReviewedAt: metadata.firstReviewedAt || metadata.reviewedAt || null,
+      error: err.message || 'Could not reach ADO API',
+    };
+  }
 }
 
 /** Add a discussion message to a feedback item */

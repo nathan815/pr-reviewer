@@ -14,6 +14,8 @@ import {
   getExamplesSinceCuration,
   updateMetadata,
   syncAdoReplies,
+  syncWorktree,
+  checkStaleness,
 } from '../lib/fileStore.js';
 import { getPRDetails } from '../lib/adoClient.js';
 import { launchCurationAgent, getCurationStatus, launchDiscussionAgent, getDiscussionStatus } from '../lib/agentLauncher.js';
@@ -38,6 +40,28 @@ reviewsRouter.get('/:repo/:prId', async (req, res) => {
   try {
     const review = await getReview(req.params.repo, req.params.prId);
     res.json(review);
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'Review not found' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Sync worktree to latest origin (fetch + reset)
+reviewsRouter.post('/:repo/:prId/sync', async (req, res) => {
+  try {
+    const result = await syncWorktree(req.params.repo, req.params.prId);
+    res.json(result);
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'Review not found' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Check if PR has new commits (staleness)
+reviewsRouter.get('/:repo/:prId/staleness', async (req, res) => {
+  try {
+    const result = await checkStaleness(req.params.repo, req.params.prId);
+    res.json(result);
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'Review not found' });
     res.status(500).json({ error: err.message });

@@ -27,6 +27,8 @@ export default function ReviewDetail() {
   const [toolbarIsSticky, setToolbarIsSticky] = useState(false);
   const [currentFeedbackIndex, setCurrentFeedbackIndex] = useState(0);
   const [adoReplySyncStarted, setAdoReplySyncStarted] = useState(false);
+  const [staleness, setStaleness] = useState(null);
+  const [syncing, setSyncing] = useState(false);
   const summaryRef = useRef(null);
   const riskRef = useRef(null);
   const changedFilesRef = useRef(null);
@@ -87,6 +89,27 @@ export default function ReviewDetail() {
       })
       .catch(() => {});
   }, [repo, prId]);
+
+  // Check staleness on load
+  useEffect(() => {
+    fetch(`/api/reviews/${repo}/${prId}/staleness`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setStaleness(data); })
+      .catch(() => {});
+  }, [repo, prId]);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch(`/api/reviews/${repo}/${prId}/sync`, { method: 'POST' });
+      if (res.ok) {
+        const result = await res.json();
+        setStaleness({ stale: false, localCommit: result.newCommit, remoteCommit: result.newCommit });
+        if (result.updated) loadReview();
+      }
+    } catch { /* ignore */ }
+    setSyncing(false);
+  };
 
   // Poll lockfile status
   useEffect(() => {
@@ -322,6 +345,21 @@ export default function ReviewDetail() {
   return (
     <>
 
+      {/* Staleness banner */}
+      {staleness?.stale && (
+        <div className="staleness-banner">
+          <span>⚠ PR has been updated{staleness.updatesBehind != null ? ` (${staleness.updatesBehind} update${staleness.updatesBehind !== 1 ? 's' : ''} behind)` : ''}. Review may be stale. Sync now and optionally re-review.</span>
+          <button className="btn btn-sm" onClick={handleSync} disabled={syncing}>
+            {syncing ? 'Syncing…' : 'Sync PR'}
+          </button>
+        </div>
+      )}
+      {staleness?.error && !staleness?.stale && (
+        <div className="staleness-banner staleness-warning">
+          <span>⚠ Could not check for PR updates: {staleness.error}</span>
+        </div>
+      )}
+
       {/* PR Header */}
       <div className="overview-section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -362,6 +400,23 @@ export default function ReviewDetail() {
                     : <>lock stale (PID {lockInfo.pid} dead)</>}
                 </span>
               )}
+              {staleness && (
+                <span className={`badge sync-status-badge ${staleness.error ? 'badge-unknown' : staleness.stale ? 'badge-medium' : 'badge-low'}`} style={{ fontSize: 12, position: 'relative', cursor: 'default' }}>
+                  {staleness.error ? '⚠ sync unknown' : staleness.stale ? `⚠ ${staleness.updatesBehind != null ? `${staleness.updatesBehind} update${staleness.updatesBehind !== 1 ? 's' : ''} behind` : 'behind'}` : '✓ up to date'}
+                  <span className="sync-status-popover">
+                    <strong>Sync Status</strong>
+                    <br />Local SHA: <code>{staleness.localCommit?.slice(0, 10) || '—'}</code>
+                    <br />Remote SHA: <code>{staleness.remoteCommit?.slice(0, 10) || '—'}</code>
+                    {staleness.updatesBehind != null && <><br />Updates behind: {staleness.updatesBehind}</>}
+                    {staleness.totalIterations != null && <><br />Total iterations: {staleness.totalIterations}</>}
+                    <br />Last checked: {staleness.checkedAt ? new Date(staleness.checkedAt).toLocaleString() : '—'}
+                    {staleness.prUpdatedAt && <><br />PR last pushed: {new Date(staleness.prUpdatedAt).toLocaleString()}</>}
+                    {staleness.firstReviewedAt && <><br />First reviewed: {new Date(staleness.firstReviewedAt).toLocaleString()}</>}
+                    {staleness.reviewedAt && <><br />Last reviewed: {new Date(staleness.reviewedAt).toLocaleString()}</>}
+                    {staleness.error && <><br /><em style={{ color: 'var(--red, #f85149)' }}>{staleness.error}</em></>}
+                  </span>
+                </span>
+              )}
             </div>
 
           </div>
@@ -376,12 +431,13 @@ export default function ReviewDetail() {
                   setShowRelaunchPrompt(!showRelaunchPrompt);
                 }}
               >
-                Re-run Review
+                Review Again
               </button>
             )}
             <RiskBadge level={risk.overallRisk} />
           </div>
         </div>
+
         <div className="review-jump-links">
           {overview && (
             <button className="btn btn-sm" onClick={() => scrollToSection(summaryRef)}>
@@ -579,6 +635,7 @@ export default function ReviewDetail() {
               repo={repo}
               prId={prId}
               prUrl={metadata.url}
+              currentCommitSha={metadata.commitSha}
               onAccept={(note) => updateStatus(item.id, 'accepted', note)}
               onNote={(note) => updateStatus(item.id, 'noted', note)}
               onReject={(note) => updateStatus(item.id, 'rejected', note)}

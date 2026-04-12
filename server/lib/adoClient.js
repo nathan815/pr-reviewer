@@ -157,6 +157,26 @@ export async function getPRThreadComments(repoName, prId, threadId) {
   return result.value || [];
 }
 
+export async function getPRIterations(repoName, prId) {
+  const { org, project } = await getConfig();
+  const base = apiBase(org, project);
+  const url = `${base}/git/repositories/${repoName}/pullRequests/${prId}/iterations?api-version=7.1`;
+
+  const response = await fetch(url, {
+    headers: { 'Authorization': await authHeader() },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    const err = new Error(parseAdoError(response.status, errorText));
+    err.statusCode = response.status;
+    throw err;
+  }
+
+  const result = await response.json();
+  return result.value || [];
+}
+
 /** Extract a readable message from ADO error responses */
 function parseAdoError(status, body) {
   try {

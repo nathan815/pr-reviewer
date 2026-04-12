@@ -171,24 +171,28 @@ function getRequestCacheKey(repo, prId, file, commitSha) {
   return [repo, prId, file, commitSha || '', 'full-diff'].join('::');
 }
 
-export default function CodeSnippet({ repo, prId, file, startLine, endLine, commitSha }) {
+export default function CodeSnippet({ repo, prId, file, startLine, endLine, commitSha, currentCommitSha }) {
   const [diffData, setDiffData] = useState(null);
   const [showFullFile, setShowFullFile] = useState(false);
   const [expandUp, setExpandUp] = useState(INITIAL_CONTEXT);
   const [expandDown, setExpandDown] = useState(INITIAL_CONTEXT);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [viewLatest, setViewLatest] = useState(false);
   const bodyRef = useRef(null);
+
+  const hasNewerCommit = currentCommitSha && commitSha && currentCommitSha !== commitSha;
+  const activeCommit = (viewLatest && hasNewerCommit) ? currentCommitSha : commitSha;
 
   useEffect(() => {
     setShowFullFile(false);
     setExpandUp(INITIAL_CONTEXT);
     setExpandDown(INITIAL_CONTEXT);
-  }, [repo, prId, file, commitSha]);
+  }, [repo, prId, file, activeCommit]);
 
   const cacheKey = useMemo(
-    () => getRequestCacheKey(repo, prId, file, commitSha),
-    [repo, prId, file, commitSha]
+    () => getRequestCacheKey(repo, prId, file, activeCommit),
+    [repo, prId, file, activeCommit]
   );
 
   useEffect(() => {
@@ -208,7 +212,7 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
 
         try {
           const params = new URLSearchParams({ path: file });
-          if (commitSha) params.set('commit', commitSha);
+          if (activeCommit) params.set('commit', activeCommit);
           params.set('context', String(FULL_DIFF_CONTEXT));
 
         const response = await fetch(`/api/reviews/${repo}/${prId}/file-diff?${params}`);
@@ -365,9 +369,18 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
       <div className="code-snippet-header">
         <span className="code-snippet-filename">
           {file}
-          {commitSha && <span className="code-snippet-sha">@ {commitSha.slice(0, 7)}</span>}
+          {commitSha && <span className="code-snippet-sha">@ {(viewLatest && hasNewerCommit ? currentCommitSha : commitSha).slice(0, 7)}</span>}
         </span>
         <div className="code-snippet-controls">
+          {hasNewerCommit && (
+            <button
+              className={`btn btn-sm ${viewLatest ? 'btn-active' : ''}`}
+              onClick={() => setViewLatest(v => !v)}
+              title={viewLatest ? 'Switch to original review diff' : 'Switch to latest code'}
+            >
+              {viewLatest ? 'Original diff' : 'Latest diff'}
+            </button>
+          )}
           <button className="btn btn-sm" onClick={() => setShowFullFile(value => !value)}>
             {showFullFile ? 'Focus region' : 'Full file'}
           </button>
@@ -377,6 +390,12 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
       {(diffData.baseUnavailable || diffData.fallbackReason) && (
         <div className="code-snippet-note">
           {diffData.fallbackReason || 'Base branch diff unavailable; showing the current file region.'}
+        </div>
+      )}
+
+      {viewLatest && hasNewerCommit && (
+        <div className="code-snippet-note" style={{ background: 'rgba(88,166,255,0.08)', borderColor: 'rgba(88,166,255,0.2)' }}>
+          Viewing latest diff. Highlighted lines may not match the original review.
         </div>
       )}
 
