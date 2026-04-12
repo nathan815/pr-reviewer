@@ -942,16 +942,20 @@ export async function launchCurationAgent() {
   prompt += `Include specific examples from the data to illustrate each rule.\n`;
   prompt += `For per-repo files, focus on what's unique to that codebase (tech stack, naming conventions, patterns used, etc.).\n`;
 
-  // Build args — replace the review prompt with curation prompt
+  // Write prompt to temp file to avoid Windows command-line length limits
+  const promptFile = path.join(os.tmpdir(), `pr-review-curation-${Date.now()}.txt`);
+  await fs.writeFile(promptFile, prompt, 'utf8');
+
+  // Build args — replace the review prompt with @promptFile reference
   const args = [...profile.args];
   const promptIdx = args.indexOf('-p');
   if (promptIdx !== -1) {
-    args[promptIdx + 1] = prompt;
+    args[promptIdx + 1] = `@${promptFile}`;
   } else {
-    args.push('-p', prompt);
+    args.push('-p', `@${promptFile}`);
   }
 
-  const displayCmd = `${profile.program} ${args.map(a => a === prompt ? '"<curation-prompt>"' : a).join(' ')}`;
+  const displayCmd = `${profile.program} ${args.map(a => a.startsWith('@') && a.includes('curation') ? '"@<prompt-file>"' : a).join(' ')}`;
 
   // Use spawn with args array to avoid Windows command-line length limit
   const child = spawn(profile.program, args, {
@@ -981,6 +985,7 @@ export async function launchCurationAgent() {
     curationAgent._stdout = stdout;
     curationAgent._stderr = stderr;
     console.log(`[curation] Agent ${curationAgent.status} (exit ${code})`);
+    fs.unlink(promptFile).catch(() => {});
   });
 
   child.on('error', (err) => {
@@ -989,6 +994,7 @@ export async function launchCurationAgent() {
     curationAgent.completedAt = new Date().toISOString();
     curationAgent._stdout = stdout;
     curationAgent._stderr = stderr;
+    fs.unlink(promptFile).catch(() => {});
   });
 
   return { status: 'launched', pid: child.pid };

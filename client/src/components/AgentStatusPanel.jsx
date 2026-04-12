@@ -179,7 +179,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched, filterTypes
                   </div>
                   <div className="agent-item-meta">
                     {!repo && agent.repo && agent.prId
-                      ? <><Link to={`/review/${agent.repo}/${agent.prId}`} onClick={e => e.stopPropagation()} style={{ color: 'var(--accent)' }}>{agent.key}</Link> · </>
+                      ? <><Link to={`/review/${agent.repo}/${agent.prId}${agent.feedbackId ? `#feedback-${agent.feedbackId}` : ''}`} onClick={e => e.stopPropagation()} style={{ color: 'var(--accent)' }}>{agent.key}</Link> · </>
                       : agent.key ? <>{agent.key} · </> : null
                     }
                     PID {agent.pid} · {timeAgo(agent.startedAt)}

@@ -55,11 +55,11 @@ const DECISION_CONFIG = {
   },
 };
 
-const VERDICT_STYLES = {
-  resolved: { bg: 'rgba(63,185,80,0.1)', border: 'rgba(63,185,80,0.3)', color: '#3fb950', label: '✓ Resolved' },
-  'partially-addressed': { bg: 'rgba(210,153,34,0.1)', border: 'rgba(210,153,34,0.3)', color: '#d29922', label: '◐ Partially addressed' },
-  'still-open': { bg: 'rgba(139,148,158,0.08)', border: 'rgba(139,148,158,0.2)', color: 'var(--text-muted)', label: '○ Still open' },
-  'cant-determine': { bg: 'rgba(139,148,158,0.08)', border: 'rgba(139,148,158,0.2)', color: 'var(--text-muted)', label: '? Cannot determine' },
+const VERDICTS = {
+  resolved: { label: '✓ Resolved', style: { bg: 'rgba(63,185,80,0.1)', border: 'rgba(63,185,80,0.3)', color: '#3fb950' } },
+  'partially-addressed': { label: '◐ Partially addressed', style: { bg: 'rgba(210,153,34,0.1)', border: 'rgba(210,153,34,0.3)', color: '#d29922' } },
+  'still-open': { label: '○ Still open', style: { bg: 'rgba(139,148,158,0.08)', border: 'rgba(139,148,158,0.2)', color: 'var(--text-muted)' } },
+  'cant-determine': { label: '? Cannot determine', style: { bg: 'rgba(139,148,158,0.08)', border: 'rgba(139,148,158,0.2)', color: 'var(--text-muted)' } },
 };
 
 function ResolutionBanner({ resolution, onAction, feedbackId }) {
@@ -68,7 +68,7 @@ function ResolutionBanner({ resolution, onAction, feedbackId }) {
   const [activeAction, setActiveAction] = useState(null); // 'accept' | 'acceptReply' | null
   const [error, setError] = useState(null);
 
-  const style = VERDICT_STYLES[resolution.verdict] || VERDICT_STYLES['still-open'];
+  const verdict = VERDICTS[resolution.verdict] || VERDICTS['still-open'];
   const isDismissed = resolution.accepted === 'dismissed';
   const isPosted = !!resolution.posted;
 
@@ -105,9 +105,9 @@ function ResolutionBanner({ resolution, onAction, feedbackId }) {
   };
 
   return (
-    <div className="resolution-banner" style={{ background: style.bg, borderColor: style.border }}>
+    <div className="resolution-banner" style={{ background: verdict.style.bg, borderColor: verdict.style.border }}>
       <div className="resolution-banner-header">
-        <span style={{ color: style.color, fontWeight: 600 }}>Agent Says: &nbsp;{style.label}</span>
+        <span style={{ color: verdict.style.color, fontWeight: 600 }}>Agent Says: &nbsp;{verdict.label}</span>
         {resolution.confidence && (
           <span className="badge" style={{ fontSize: 10 }}>{resolution.confidence} confidence</span>
         )}
