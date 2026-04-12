@@ -127,6 +127,8 @@ a:hover { text-decoration: underline; }
   transition: background 0.15s;
 }
 .btn:hover { background: var(--surface-hover); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn:disabled:hover { background: var(--surface); }
 .btn-accept { border-color: var(--green); color: var(--green); }
 .btn-accept:hover { background: rgba(63,185,80,0.15); }
 .btn-accept.is-selected { background: rgba(63,185,80,0.15); }
@@ -920,6 +922,20 @@ a:hover { text-decoration: underline; }
   background: rgba(255,100,100,0.08);
   border-color: rgba(255,100,100,0.25);
   color: var(--text-muted);
+}
+
+.resolution-pending-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  margin-bottom: 12px;
+  border-radius: 6px;
+  background: rgba(88,166,255,0.1);
+  border: 1px solid rgba(88,166,255,0.3);
+  color: var(--accent);
+  font-size: 13px;
 }
 
 .sync-status-badge {

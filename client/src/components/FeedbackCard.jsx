@@ -112,7 +112,7 @@ function ResolutionBanner({ resolution, onAction, feedbackId }) {
           <span className="badge" style={{ fontSize: 10 }}>{resolution.confidence} confidence</span>
         )}
         {isPosted && (
-          <span className="badge badge-low" style={{ fontSize: 10 }}>✓ Accepted</span>
+          <span className="badge badge-low" style={{ fontSize: 10 }}>✓ Resolved by You</span>
         )}
       </div>
 

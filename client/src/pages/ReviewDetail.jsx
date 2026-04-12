@@ -343,15 +343,23 @@ export default function ReviewDetail() {
   const resolveAllResolutions = async () => {
     setPosting(true);
     try {
-      // Accept all first, then resolve-only all
+      // Accept all resolved proposals first
       await fetch(`/api/reviews/${repo}/${prId}/resolutions-accept-all`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ verdicts: ['resolved'] }),
       });
-      const res = await fetch(`/api/reviews/${repo}/${prId}/resolutions-post-accepted`, { method: 'POST' });
-      const data = await res.json();
-      setPostResult({ success: data.failed === 0, posted: data.posted, failed: data.failed });
+      // Resolve-only each accepted proposal (no reply posted)
+      const { proposals } = await fetch(`/api/reviews/${repo}/${prId}/resolutions`).then(r => r.json());
+      const toResolve = (proposals || []).filter(p => p.accepted === 'accepted' && !p.posted);
+      let posted = 0, failed = 0;
+      for (const p of toResolve) {
+        try {
+          const res = await fetch(`/api/reviews/${repo}/${prId}/resolutions/${p.feedbackId}/resolve-only`, { method: 'POST' });
+          if (res.ok) posted++; else failed++;
+        } catch { failed++; }
+      }
+      setPostResult({ success: failed === 0, posted, failed, resolveOnly: true });
     } catch (err) {
       setPostResult({ success: false, error: err.message });
     } finally {
@@ -430,6 +438,16 @@ export default function ReviewDetail() {
           <span>⚠ PR has been updated{staleness.updatesBehind != null ? ` (${staleness.updatesBehind} update${staleness.updatesBehind !== 1 ? 's' : ''} behind)` : ''}. Review may be stale. Sync now and optionally re-review.</span>
           <button className="btn btn-sm" onClick={handleSync} disabled={syncing}>
             {syncing ? 'Syncing…' : 'Sync PR'}
+          </button>
+        </div>
+      )}
+
+      {/* Resolution proposals pending review */}
+      {unpostedResolutions > 0 && (
+        <div className="resolution-pending-banner">
+          <span>🔍 Agent has verified status of {unpostedResolutions} feedback item{unpostedResolutions !== 1 ? 's' : ''} — pending your review</span>
+          <button className="btn btn-sm" onClick={() => { setFilter('posted'); scrollToSection(feedbackSectionRef); }}>
+            Review Now
           </button>
         </div>
       )}
@@ -675,7 +693,11 @@ export default function ReviewDetail() {
                 <>
                   <span style={{ borderLeft: '1px solid var(--border)', height: 20, margin: '0 4px' }} />
                   {unpostedResolutions > 0 && (
-                    <button className="btn btn-sm" onClick={resolveAllResolutions} disabled={posting}>
+                    <button className="btn btn-sm" onClick={() => {
+                      if (window.confirm(`Resolve ${unpostedResolutions} thread${unpostedResolutions !== 1 ? 's' : ''} in ADO without posting replies?`)) {
+                        resolveAllResolutions();
+                      }
+                    }} disabled={posting}>
                       <IconCheck /> Resolve All ({unpostedResolutions})
                     </button>
                   )}
@@ -743,7 +765,7 @@ export default function ReviewDetail() {
             {postResult.error
               ? <><IconX /> {postResult.error}</>
               : postResult.success
-                ? <><IconCheck /> Successfully posted {postResult.posted} comment(s) to ADO</>
+                ? <><IconCheck /> Successfully {postResult.resolveOnly ? `resolved ${postResult.posted} thread${postResult.posted !== 1 ? 's' : ''}` : `posted ${postResult.posted} comment${postResult.posted !== 1 ? 's' : ''} to ADO`}</>
                 : <>Posted {postResult.posted}, failed {postResult.failed}: {postResult.errors?.map(e => e.error).join('; ')}</>
             }
           </div>
