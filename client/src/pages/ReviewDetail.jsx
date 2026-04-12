@@ -32,6 +32,8 @@ export default function ReviewDetail() {
   const [staleness, setStaleness] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [resolutions, setResolutions] = useState(null);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const moreMenuRef = useRef(null);
   const summaryRef = useRef(null);
   const riskRef = useRef(null);
   const changedFilesRef = useRef(null);
@@ -105,6 +107,16 @@ export default function ReviewDetail() {
       .catch(() => {});
   }, [repo, prId]);
 
+  // Close ⋯ menu on click outside
+  useEffect(() => {
+    if (!showMoreMenu) return;
+    const handler = (e) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setShowMoreMenu(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showMoreMenu]);
+
   const handleSync = async () => {
     setSyncing(true);
     try {
@@ -112,7 +124,7 @@ export default function ReviewDetail() {
       if (res.ok) {
         const result = await res.json();
         setStaleness({ stale: false, localCommit: result.newCommit, remoteCommit: result.newCommit });
-        if (result.updated) loadReview();
+        loadReview();
       }
     } catch { /* ignore */ }
     setSyncing(false);
@@ -484,10 +496,11 @@ export default function ReviewDetail() {
                   </span>
                 </span>
               )}
+              <RiskBadge level={risk.overallRisk} prefix="risk:" />
             </div>
 
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }}>
             {metadata.url && (
               <button
                 className="btn btn-rerun"
@@ -501,7 +514,26 @@ export default function ReviewDetail() {
                 Review Again
               </button>
             )}
-            <RiskBadge level={risk.overallRisk} />
+            <div ref={moreMenuRef} style={{ position: 'relative' }}>
+              <button
+                className="btn btn-sm"
+                onClick={() => setShowMoreMenu(!showMoreMenu)}
+                title="More actions"
+                style={{ padding: '4px 8px', fontSize: 16, lineHeight: 1 }}
+              >
+                ⋯
+              </button>
+              {showMoreMenu && (
+                <div className="more-menu-dropdown">
+                  <button className="more-menu-item" onClick={() => { setShowMoreMenu(false); handleSync(); }} disabled={syncing}>
+                    {syncing ? '⟳ Syncing…' : '⟳ Sync PR'}
+                  </button>
+                  <button className="more-menu-item" onClick={() => { setShowMoreMenu(false); setShowDeleteConfirm(true); }}>
+                    🗑 Delete Review
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

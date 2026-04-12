@@ -407,7 +407,7 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, curr
           {isPosted && item.adoThreadStatus && (
             <span className={`badge status-ado-${item.adoThreadStatus}`} title="ADO thread status">
               {item.adoThreadStatus === 'active' ? '💬 Active' :
-               item.adoThreadStatus === 'fixed' ? '✓ Fixed' :
+               item.adoThreadStatus === 'fixed' ? '✓ Resolved' :
                item.adoThreadStatus === 'closed' ? '✓ Closed' :
                item.adoThreadStatus === 'wontFix' ? '✕ Won\'t Fix' :
                item.adoThreadStatus === 'byDesign' ? '✓ By Design' :

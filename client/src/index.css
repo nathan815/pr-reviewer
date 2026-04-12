@@ -955,6 +955,20 @@ a:hover { text-decoration: underline; }
   display: block;
 }
 
+/* More actions dropdown menu */
+.more-menu-dropdown {
+  position: absolute; top: 100%; right: 0; margin-top: 4px; z-index: 100;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3); min-width: 160px; padding: 4px 0;
+}
+.more-menu-item {
+  display: block; width: 100%; text-align: left; padding: 8px 14px;
+  background: none; border: none; color: var(--text-primary); font-size: 13px;
+  cursor: pointer; white-space: nowrap;
+}
+.more-menu-item:hover { background: rgba(88,166,255,0.1); }
+.more-menu-item:disabled { opacity: 0.5; cursor: default; }
+
 /* review_requested status */
 .status-requested { background: rgba(88,166,255,0.15); color: var(--accent); }
 

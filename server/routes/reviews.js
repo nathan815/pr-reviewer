@@ -128,10 +128,15 @@ reviewsRouter.get('/:repo/:prId/ado-info', async (req, res) => {
       closedAt: pr.closedDate,
     };
 
-    // Sync title back to metadata if changed
+    // Sync metadata fields back if missing or changed
     const review = await getReview(repo, prId);
-    if (review.metadata.title !== info.title) {
-      await updateMetadata(repo, prId, { title: info.title });
+    const metaUpdates = {};
+    if (review.metadata.title !== info.title) metaUpdates.title = info.title;
+    if (!review.metadata.author && pr.createdBy?.uniqueName) metaUpdates.author = pr.createdBy.uniqueName;
+    if (!review.metadata.sourceBranch && info.sourceBranch) metaUpdates.sourceBranch = info.sourceBranch;
+    if (!review.metadata.targetBranch && info.targetBranch) metaUpdates.targetBranch = info.targetBranch;
+    if (Object.keys(metaUpdates).length > 0) {
+      await updateMetadata(repo, prId, metaUpdates);
     }
 
     res.json(info);
