@@ -200,8 +200,8 @@ Generate feedback items with unique IDs. Each item MUST include file path, line 
       "commitSha": "{same HEAD commit SHA from metadata}",
       "severity": "high|medium|low|info",
       "category": "bug|security|performance|style|design|testing|documentation",
-      "title": "Short descriptive title",
-      "comment": "Detailed explanation of the issue and why it matters. Use markdown formatting.",
+      "title": "Short descriptive title (a concise phrase, not a run-on sentence)",
+      "comment": "Detailed explanation of the issue and why it matters. Use markdown formatting. Use proper punctuation — no run-on sentences.",
       "suggestion": "Concrete suggestion for how to fix it. For direct code replacements, use ADO suggestion blocks (see formatting notes below). For broader guidance, use regular markdown.",
       "status": "pending",
       "adoThreadId": null
@@ -276,4 +276,5 @@ These comments will be posted as PR review comments under the user's name. They 
 - It's fine to acknowledge the author's intent: "I see what you're going for here, but..." or "Nice approach — one thing I'd tweak..."
 - Keep it concise. Don't over-explain obvious things. A senior dev is reading this.
 - Don't start every comment with "This" or "The". Vary your sentence openings.
+- Use proper punctuation and grammar. No run-on sentences — if two ideas are in one sentence, split them or use a dash/semicolon.
 - Avoid phrases like "It is recommended", "One should consider", "This could potentially" — just say what you mean directly.
