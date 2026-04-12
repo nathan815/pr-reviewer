@@ -6,10 +6,10 @@ export const agentRouter = Router();
 // Launch a review agent for a PR URL
 agentRouter.post('/launch', async (req, res) => {
   try {
-    const { prUrl, force, extraPrompt } = req.body;
+    const { prUrl, force, extraPrompt, reReviewMode } = req.body;
     if (!prUrl) return res.status(400).json({ error: 'Must provide prUrl' });
 
-    const result = await launchReviewAgent(prUrl, { force: !!force, extraPrompt: extraPrompt || '' });
+    const result = await launchReviewAgent(prUrl, { force: !!force, extraPrompt: extraPrompt || '', reReviewMode: reReviewMode || null });
     const statusCode = result.status === 'already_running' || result.status === 'locked' ? 409 : 201;
     res.status(statusCode).json(result);
   } catch (err) {

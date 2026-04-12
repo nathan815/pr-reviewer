@@ -47,13 +47,21 @@ export function parsePrUrl(url) {
 }
 
 /** Build the command + args from config, substituting {{prUrl}} and appending extra prompt */
-async function buildCommand(prUrl, extraPrompt) {
+async function buildCommand(prUrl, extraPrompt, reReviewMode) {
   const config = await readConfig();
   const profile = config.profiles?.[config.activeProfile] || config.reviewCommand;
 
   const program = profile.program;
   const args = profile.args.map(a => {
     let val = a.replace(/\{\{prUrl\}\}/g, prUrl);
+    // Append re-review mode instructions
+    if (reReviewMode && a.includes('{{prUrl}}')) {
+      if (reReviewMode === 'resolutions-only') {
+        val += '\n\n--- RE-REVIEW MODE: RESOLUTIONS ONLY ---\nDo NOT generate new feedback. Only check existing feedback items for resolutions. Follow the "Re-Review Mode" section in SKILL.md.';
+      } else if (reReviewMode === 'full') {
+        val += '\n\n--- RE-REVIEW MODE: FULL ---\nCheck existing feedback items for resolutions AND also review any new/changed code for additional feedback. Follow both the main review flow and the "Re-Review Mode" section in SKILL.md.';
+      }
+    }
     // Append extra prompt to the -p argument if provided
     if (extraPrompt && a.includes('{{prUrl}}')) {
       val += '\n\nAdditional instructions from user:\n' + extraPrompt;
@@ -64,7 +72,7 @@ async function buildCommand(prUrl, extraPrompt) {
 }
 
 /** Launch a background agent to review a PR. Use force=true to relaunch. */
-export async function launchReviewAgent(prUrl, { force = false, extraPrompt = '' } = {}) {
+export async function launchReviewAgent(prUrl, { force = false, extraPrompt = '', reReviewMode = null } = {}) {
   const parsed = parsePrUrl(prUrl);
   if (!parsed) throw new Error('Could not parse PR URL. Expected ADO format.');
 
@@ -116,7 +124,7 @@ export async function launchReviewAgent(prUrl, { force = false, extraPrompt = ''
     await fs.copyFile(overviewPath, path.join(prDir, `overview-backup-${ts}.md`));
   } catch { /* no existing overview, nothing to back up */ }
 
-  const { program, args, profileName } = await buildCommand(prUrl, extraPrompt);
+  const { program, args, profileName } = await buildCommand(prUrl, extraPrompt, reReviewMode);
   const shellCmd = [program, ...args.map(a => a.includes(' ') ? `"${a}"` : a)].join(' ');
 
   const child = spawn(program, args, {

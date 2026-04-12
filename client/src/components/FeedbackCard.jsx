@@ -49,6 +49,120 @@ const DECISION_CONFIG = {
   },
 };
 
+const VERDICT_STYLES = {
+  resolved: { bg: 'rgba(63,185,80,0.1)', border: 'rgba(63,185,80,0.3)', color: '#3fb950', label: '✓ Resolved' },
+  'partially-addressed': { bg: 'rgba(210,153,34,0.1)', border: 'rgba(210,153,34,0.3)', color: '#d29922', label: '◐ Partially addressed' },
+  'still-open': { bg: 'rgba(139,148,158,0.08)', border: 'rgba(139,148,158,0.2)', color: 'var(--text-muted)', label: '○ Still open' },
+  'cant-determine': { bg: 'rgba(139,148,158,0.08)', border: 'rgba(139,148,158,0.2)', color: 'var(--text-muted)', label: '? Cannot determine' },
+};
+
+function ResolutionBanner({ resolution, onAction, feedbackId }) {
+  const [editingReply, setEditingReply] = useState(false);
+  const [replyText, setReplyText] = useState(resolution.proposedReply || '');
+  const [posting, setPosting] = useState(false);
+
+  const style = VERDICT_STYLES[resolution.verdict] || VERDICT_STYLES['still-open'];
+  const isAccepted = resolution.accepted === 'accepted';
+  const isRejected = resolution.accepted === 'rejected';
+  const isPosted = !!resolution.posted;
+
+  useEffect(() => {
+    setReplyText(resolution.proposedReply || '');
+  }, [resolution.proposedReply]);
+
+  const handleAccept = async () => {
+    if (onAction) await onAction(feedbackId, 'accept', { proposedReply: replyText });
+  };
+  const handleReject = async () => {
+    if (onAction) await onAction(feedbackId, 'reject');
+  };
+  const handlePost = async () => {
+    setPosting(true);
+    try {
+      if (onAction) await onAction(feedbackId, 'post');
+    } finally {
+      setPosting(false);
+    }
+  };
+  const handleSaveReply = async () => {
+    if (onAction) await onAction(feedbackId, 'accept', { proposedReply: replyText });
+    setEditingReply(false);
+  };
+
+  return (
+    <div className="resolution-banner" style={{ background: style.bg, borderColor: style.border }}>
+      <div className="resolution-banner-header">
+        <span style={{ color: style.color, fontWeight: 600 }}>{style.label}</span>
+        {resolution.confidence && (
+          <span className="badge" style={{ fontSize: 10 }}>{resolution.confidence} confidence</span>
+        )}
+        {isPosted && (
+          <span className="badge badge-low" style={{ fontSize: 10 }}>✓ Posted to ADO</span>
+        )}
+      </div>
+
+      {resolution.reasoning && (
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0' }}>
+          {resolution.reasoning}
+        </div>
+      )}
+
+      {resolution.proposedReply && !isPosted && (
+        <div style={{ margin: '8px 0 4px' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Proposed ADO reply:</div>
+          {editingReply ? (
+            <div>
+              <textarea
+                value={replyText}
+                onChange={e => setReplyText(e.target.value)}
+                style={{ width: '100%', minHeight: 60, fontSize: 13, background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 4, padding: '6px 8px', resize: 'vertical' }}
+              />
+              <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                <button className="btn btn-sm btn-accept" onClick={handleSaveReply}>Save</button>
+                <button className="btn btn-sm" onClick={() => { setReplyText(resolution.proposedReply || ''); setEditingReply(false); }}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{ fontSize: 13, padding: '6px 8px', background: 'rgba(0,0,0,0.15)', borderRadius: 4, cursor: 'pointer' }}
+              onClick={() => !isAccepted || setEditingReply(true)}
+              title={isAccepted ? 'Click to edit reply' : ''}
+            >
+              <Markdown>{replyText}</Markdown>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!isPosted && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
+          {!isAccepted && !isRejected && (resolution.verdict === 'resolved' || resolution.verdict === 'partially-addressed') && (
+            <>
+              <button className="btn btn-sm btn-accept" onClick={handleAccept}>Accept Resolution</button>
+              <button className="btn btn-sm btn-reject" onClick={handleReject}>Reject</button>
+              <button className="btn btn-sm" onClick={() => setEditingReply(true)}>Edit Reply</button>
+            </>
+          )}
+          {isAccepted && (
+            <>
+              <button className="btn btn-sm btn-accept" onClick={handlePost} disabled={posting}>
+                {posting ? 'Posting…' : 'Post to ADO'}
+              </button>
+              <button className="btn btn-sm" onClick={() => setEditingReply(true)}>Edit Reply</button>
+              <button className="btn btn-sm btn-reject" onClick={handleReject}>Undo</button>
+            </>
+          )}
+          {isRejected && (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              Rejected — <button className="btn btn-sm" onClick={handleAccept} style={{ fontSize: 11 }}>undo</button>
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function buildAdoFileUrl(prUrl, filePath, startLine, endLine) {
   if (!prUrl || !filePath) return null;
 
@@ -72,7 +186,7 @@ function buildAdoFileUrl(prUrl, filePath, startLine, endLine) {
   }
 }
 
-export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, currentCommitSha, onAccept, onNote, onReject, onReset, onPost, onItemUpdated }) {
+export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, currentCommitSha, resolution, onAccept, onNote, onReject, onReset, onPost, onItemUpdated, onResolutionAction }) {
   const [postingThis, setPostingThis] = useState(false);
   const [error, setError] = useState(null);
   const [noteText, setNoteText] = useState('');
@@ -307,6 +421,15 @@ export default function FeedbackCard({ item, itemNumber, repo, prId, prUrl, curr
           endLine={item.endLine}
           commitSha={item.commitSha}
           currentCommitSha={currentCommitSha}
+        />
+      )}
+
+      {/* Resolution proposal banner */}
+      {resolution && (
+        <ResolutionBanner
+          resolution={resolution}
+          onAction={onResolutionAction}
+          feedbackId={item.id}
         />
       )}
 

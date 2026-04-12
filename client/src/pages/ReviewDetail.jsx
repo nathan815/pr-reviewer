@@ -19,6 +19,7 @@ export default function ReviewDetail() {
   const [relaunching, setRelaunching] = useState(false);
   const [showRelaunchPrompt, setShowRelaunchPrompt] = useState(false);
   const [relaunchText, setRelaunchText] = useState('');
+  const [relaunchMode, setRelaunchMode] = useState('full');
   const [activeFile, setActiveFile] = useState(null);
   const [adoInfo, setAdoInfo] = useState(null);
   const [lockInfo, setLockInfo] = useState(null);
@@ -29,6 +30,7 @@ export default function ReviewDetail() {
   const [adoReplySyncStarted, setAdoReplySyncStarted] = useState(false);
   const [staleness, setStaleness] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [resolutions, setResolutions] = useState(null);
   const summaryRef = useRef(null);
   const riskRef = useRef(null);
   const changedFilesRef = useRef(null);
@@ -47,6 +49,10 @@ export default function ReviewDetail() {
       .then(r => r.json())
       .then(data => { setReview(data); setLoading(false); })
       .catch(() => setLoading(false));
+    fetch(`/api/reviews/${repo}/${prId}/resolutions`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => setResolutions(data))
+      .catch(() => {});
   }, [repo, prId]);
 
   useEffect(() => { loadReview(); }, [loadReview]);
@@ -281,15 +287,68 @@ export default function ReviewDetail() {
           prUrl: review.metadata.url,
           force: true,
           extraPrompt: relaunchText || undefined,
+          reReviewMode: relaunchMode === 're-review' ? 'resolutions-only' : relaunchMode === 'full-re-review' ? 'full' : undefined,
         }),
       });
       setShowRelaunchPrompt(false);
       setRelaunchText('');
+      setRelaunchMode('full');
       setTimeout(loadReview, 2000);
     } finally {
       setRelaunching(false);
     }
   };
+
+  const handleResolutionAction = async (feedbackId, action, edits) => {
+    if (action === 'post') {
+      const res = await fetch(`/api/reviews/${repo}/${prId}/resolutions/${feedbackId}/post`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Post failed');
+      }
+    } else {
+      await fetch(`/api/reviews/${repo}/${prId}/resolutions/${feedbackId}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(edits || {}),
+      });
+    }
+    loadReview();
+  };
+
+  const acceptAllResolutions = async () => {
+    await fetch(`/api/reviews/${repo}/${prId}/resolutions-accept-all`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ verdicts: ['resolved'] }),
+    });
+    loadReview();
+  };
+
+  const postAllResolutions = async () => {
+    setPosting(true);
+    try {
+      const res = await fetch(`/api/reviews/${repo}/${prId}/resolutions-post-accepted`, { method: 'POST' });
+      const data = await res.json();
+      setPostResult({ success: data.failed === 0, posted: data.posted, failed: data.failed });
+    } catch (err) {
+      setPostResult({ success: false, error: err.message });
+    } finally {
+      setPosting(false);
+      loadReview();
+    }
+  };
+
+  // Build resolution map: feedbackId → proposal
+  const resolutionMap = {};
+  if (resolutions?.proposals) {
+    for (const p of resolutions.proposals) {
+      resolutionMap[p.feedbackId] = p;
+    }
+  }
+  const hasResolutions = Object.keys(resolutionMap).length > 0;
+  const resolvedCount = resolutions?.proposals?.filter(p => p.verdict === 'resolved').length || 0;
+  const acceptedResolutions = resolutions?.proposals?.filter(p => p.accepted === 'accepted' && !p.posted).length || 0;
 
   if (loading) return <div className="loading">Loading review</div>;
   if (!review) return <div className="empty-state">Review not found</div>;
@@ -458,6 +517,18 @@ export default function ReviewDetail() {
         </div>
         {showRelaunchPrompt && (
           <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+              <label style={{ fontSize: '0.85em', fontWeight: 600 }}>Mode:</label>
+              <select
+                value={relaunchMode}
+                onChange={e => setRelaunchMode(e.target.value)}
+                style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'inherit', fontSize: '0.85em' }}
+              >
+                <option value="full">Full review (from scratch)</option>
+                <option value="re-review">Check resolutions only</option>
+                <option value="full-re-review">Re-review + new feedback</option>
+              </select>
+            </div>
             <textarea
               className="instructions-editor"
               style={{ minHeight: 60, marginBottom: 8 }}
@@ -556,6 +627,21 @@ export default function ReviewDetail() {
               >
                 {posting ? 'Posting...' : <><IconSend /> Post {acceptedCount} Accepted to ADO</>}
               </button>
+              {hasResolutions && (
+                <>
+                  <span style={{ borderLeft: '1px solid var(--border)', height: 20, margin: '0 4px' }} />
+                  {resolvedCount > 0 && (
+                    <button className="btn btn-sm" onClick={acceptAllResolutions} disabled={resolvedCount === 0}>
+                      <IconCheck /> Accept {resolvedCount} Resolved
+                    </button>
+                  )}
+                  {acceptedResolutions > 0 && (
+                    <button className="btn btn-sm btn-post" onClick={postAllResolutions} disabled={posting || acceptedResolutions === 0}>
+                      <IconSend /> Post {acceptedResolutions} Resolutions
+                    </button>
+                  )}
+                </>
+              )}
               <button
                 className="btn btn-reject"
                 onClick={() => setShowDeleteConfirm(true)}
@@ -642,6 +728,8 @@ export default function ReviewDetail() {
               onReset={() => updateStatus(item.id, 'pending')}
               onPost={() => postSingle(item.id)}
               onItemUpdated={loadReview}
+              resolution={resolutionMap[item.id] || null}
+              onResolutionAction={handleResolutionAction}
             />
           ))
         )}

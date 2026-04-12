@@ -16,8 +16,11 @@ import {
   syncAdoReplies,
   syncWorktree,
   checkStaleness,
+  readAllResolutions,
+  updateResolutionStatus,
+  markResolutionPosted,
 } from '../lib/fileStore.js';
-import { getPRDetails } from '../lib/adoClient.js';
+import { getPRDetails, replyToThread, updateThreadStatus } from '../lib/adoClient.js';
 import { launchCurationAgent, getCurationStatus, launchDiscussionAgent, getDiscussionStatus } from '../lib/agentLauncher.js';
 
 const REVIEWS_ROOT = path.join(os.homedir(), 'pr-reviews');
@@ -248,6 +251,122 @@ reviewsRouter.get('/:repo/:prId/feedback/:feedbackId/ado-thread', async (req, re
     });
   } catch (err) {
     if (err.message?.includes('not found')) return res.status(404).json({ error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Resolution proposals ---
+
+// Get all resolution proposals for a PR
+reviewsRouter.get('/:repo/:prId/resolutions', async (req, res) => {
+  try {
+    const result = await readAllResolutions(req.params.repo, req.params.prId);
+    res.json(result);
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'Review not found' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Post a single accepted resolution to ADO (reply + resolve thread)
+reviewsRouter.post('/:repo/:prId/resolutions/:feedbackId/post', async (req, res) => {
+  try {
+    const { repo, prId, feedbackId } = req.params;
+    const { proposals } = await readAllResolutions(repo, prId);
+    const proposal = proposals.find(p => p.feedbackId === feedbackId);
+    if (!proposal) return res.status(404).json({ error: 'Resolution proposal not found' });
+    if (proposal.accepted !== 'accepted') return res.status(400).json({ error: 'Proposal must be accepted before posting' });
+    if (proposal.posted) return res.status(409).json({ error: 'Already posted' });
+
+    const review = await getReview(repo, prId);
+    const item = review.feedback.items.find(i => i.id === feedbackId);
+    if (!item?.adoThreadId) return res.status(400).json({ error: 'Feedback has no ADO thread to reply to' });
+
+    // Post the reply
+    const replyContent = (proposal.proposedReply || 'This has been addressed.') +
+      '\n\n---\n<sub>Resolution confirmed by PR Review Agent.</sub>';
+    await replyToThread(repo, prId, item.adoThreadId, replyContent);
+
+    // Update thread status
+    const threadStatus = proposal.proposedThreadStatus || 'fixed';
+    await updateThreadStatus(repo, prId, item.adoThreadId, threadStatus);
+
+    // Mark as posted locally
+    await markResolutionPosted(repo, prId, feedbackId);
+
+    res.json({ success: true, threadId: item.adoThreadId, status: threadStatus });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+// Accept or reject a resolution proposal
+reviewsRouter.post('/:repo/:prId/resolutions/:feedbackId/:action', async (req, res) => {
+  try {
+    const { repo, prId, feedbackId, action } = req.params;
+    if (action !== 'accept' && action !== 'reject') {
+      return res.status(400).json({ error: 'Action must be accept or reject' });
+    }
+    const edits = req.body || {};
+    const result = await updateResolutionStatus(repo, prId, feedbackId, action === 'accept' ? 'accepted' : 'rejected', edits);
+    if (!result) return res.status(404).json({ error: 'Resolution proposal not found' });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Bulk accept all resolved proposals
+reviewsRouter.post('/:repo/:prId/resolutions-accept-all', async (req, res) => {
+  try {
+    const { repo, prId } = req.params;
+    const { verdicts } = req.body || {};
+    const filter = verdicts || ['resolved'];
+    const { proposals } = await readAllResolutions(repo, prId);
+    const toAccept = proposals.filter(p => filter.includes(p.verdict) && p.accepted !== 'accepted' && !p.posted);
+    const results = [];
+    for (const p of toAccept) {
+      const result = await updateResolutionStatus(repo, prId, p.feedbackId, 'accepted');
+      if (result) results.push(result);
+    }
+    res.json({ accepted: results.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Post all accepted resolutions to ADO
+reviewsRouter.post('/:repo/:prId/resolutions-post-accepted', async (req, res) => {
+  try {
+    const { repo, prId } = req.params;
+    const { proposals } = await readAllResolutions(repo, prId);
+    const toPost = proposals.filter(p => p.accepted === 'accepted' && !p.posted);
+
+    const review = await getReview(repo, prId);
+    const results = [];
+    const errors = [];
+
+    for (const proposal of toPost) {
+      try {
+        const item = review.feedback.items.find(i => i.id === proposal.feedbackId);
+        if (!item?.adoThreadId) {
+          errors.push({ feedbackId: proposal.feedbackId, error: 'No ADO thread' });
+          continue;
+        }
+
+        const replyContent = (proposal.proposedReply || 'This has been addressed.') +
+          '\n\n---\n<sub>Resolution confirmed by PR Review Agent.</sub>';
+        await replyToThread(repo, prId, item.adoThreadId, replyContent);
+        await updateThreadStatus(repo, prId, item.adoThreadId, proposal.proposedThreadStatus || 'fixed');
+        await markResolutionPosted(repo, prId, proposal.feedbackId);
+        results.push({ feedbackId: proposal.feedbackId, threadId: item.adoThreadId });
+      } catch (err) {
+        errors.push({ feedbackId: proposal.feedbackId, error: err.message });
+      }
+    }
+
+    res.json({ posted: results.length, failed: errors.length, results, errors });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

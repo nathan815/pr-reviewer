@@ -495,6 +495,90 @@ export async function checkStaleness(repo, prId) {
   }
 }
 
+// --- Resolution proposals ---
+
+/** Read the latest resolutions file for a PR */
+export async function readResolutions(repo, prId) {
+  const dir = reviewDir(repo, prId);
+  const files = await fs.readdir(dir).catch(() => []);
+  const resFiles = files.filter(f => f.startsWith('resolutions-') && f.endsWith('.json')).sort();
+  if (!resFiles.length) return null;
+
+  const latest = await readJson(path.join(dir, resFiles[resFiles.length - 1]));
+  return { ...latest, fileName: resFiles[resFiles.length - 1] };
+}
+
+/** Read all resolution files and merge proposals (latest wins per feedbackId) */
+export async function readAllResolutions(repo, prId) {
+  const dir = reviewDir(repo, prId);
+  const files = await fs.readdir(dir).catch(() => []);
+  const resFiles = files.filter(f => f.startsWith('resolutions-') && f.endsWith('.json')).sort();
+  if (!resFiles.length) return { proposals: [], files: [] };
+
+  const merged = new Map();
+  for (const f of resFiles) {
+    const data = await readJson(path.join(dir, f));
+    if (!data?.proposals) continue;
+    for (const p of data.proposals) {
+      merged.set(p.feedbackId, { ...p, sourceFile: f, commitSha: data.commitSha });
+    }
+  }
+
+  return { proposals: [...merged.values()], files: resFiles };
+}
+
+/** Update a resolution proposal's acceptance status */
+export async function updateResolutionStatus(repo, prId, feedbackId, status, edits = {}) {
+  const dir = reviewDir(repo, prId);
+  const files = await fs.readdir(dir).catch(() => []);
+  const resFiles = files.filter(f => f.startsWith('resolutions-') && f.endsWith('.json')).sort().reverse();
+
+  for (const f of resFiles) {
+    const filePath = path.join(dir, f);
+    const result = await withFileLock(filePath, async () => {
+      const data = await readJson(filePath);
+      if (!data?.proposals) return null;
+      const proposal = data.proposals.find(p => p.feedbackId === feedbackId);
+      if (!proposal) return null;
+
+      proposal.accepted = status; // 'accepted' | 'rejected' | null
+      if (edits.proposedReply !== undefined) proposal.proposedReply = edits.proposedReply;
+      if (edits.proposedThreadStatus !== undefined) proposal.proposedThreadStatus = edits.proposedThreadStatus;
+      if (status === 'accepted') proposal.acceptedAt = new Date().toISOString();
+
+      await fs.writeFile(filePath, JSON.stringify(data, null, 2));
+      return proposal;
+    });
+    if (result) return result;
+  }
+  return null;
+}
+
+/** Mark a resolution as posted to ADO */
+export async function markResolutionPosted(repo, prId, feedbackId) {
+  const dir = reviewDir(repo, prId);
+  const files = await fs.readdir(dir).catch(() => []);
+  const resFiles = files.filter(f => f.startsWith('resolutions-') && f.endsWith('.json')).sort().reverse();
+
+  for (const f of resFiles) {
+    const filePath = path.join(dir, f);
+    const result = await withFileLock(filePath, async () => {
+      const data = await readJson(filePath);
+      if (!data?.proposals) return null;
+      const proposal = data.proposals.find(p => p.feedbackId === feedbackId);
+      if (!proposal) return null;
+
+      proposal.posted = true;
+      proposal.postedAt = new Date().toISOString();
+
+      await fs.writeFile(filePath, JSON.stringify(data, null, 2));
+      return proposal;
+    });
+    if (result) return result;
+  }
+  return null;
+}
+
 /** Add a discussion message to a feedback item */
 export async function addDiscussionMessage(repo, prId, feedbackId, role, message, extra = {}) {
   const dir = reviewDir(repo, prId);

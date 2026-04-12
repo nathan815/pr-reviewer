@@ -245,6 +245,116 @@ Found {N} feedback items ({H} high, {M} medium, {L} low severity).
 Overall risk: {risk level}
 ```
 
+## Re-Review Mode
+
+When the user's prompt includes instructions for re-review (e.g., "check resolutions", "re-review", or "review again"), follow this flow instead of a full initial review.
+
+### Re-Review Step 1: Determine mode
+The user prompt may specify one of:
+- **Check resolutions only** — only check existing feedback items against current code
+- **Full re-review** — check resolutions AND review new/changed code for additional feedback
+
+If unclear, default to "check resolutions only".
+
+### Re-Review Step 2: Sync worktree
+Before checking resolutions, ensure the worktree is up to date:
+```powershell
+cd "$HOME\pr-reviews\{repo}\{prId}\worktree"
+git fetch origin
+git reset --hard origin/{sourceBranch}
+$newCommit = git rev-parse HEAD
+```
+
+### Re-Review Step 3: Read existing feedback
+```powershell
+$feedbackFiles = Get-ChildItem "$HOME\pr-reviews\{repo}\{prId}\feedback-*.json"
+```
+Parse all feedback items from these files. For each item, note:
+- `id`, `file`, `startLine`, `endLine`, `commitSha` (the original review commit)
+- `title`, `comment`, `suggestion` (what was flagged)
+- `status` (pending/accepted/posted/dismissed)
+- `adoThreadId` (if it was posted to ADO)
+
+### Re-Review Step 4: Compare old vs new code for each feedback item
+For each feedback item that has `status` of `accepted` or `posted`:
+1. Get the **original code** at the feedback's `commitSha`:
+   ```powershell
+   git show {commitSha}:{file} | Select-Object -Index ({startLine-1}..{endLine-1})
+   ```
+2. Get the **current code** at the same location:
+   ```powershell
+   # Use grep -n to find the same code region in the current version
+   grep -n "unique pattern from original code" {file}
+   ```
+3. Also check the full diff for that file between old and new:
+   ```powershell
+   git diff {commitSha}..HEAD -- {file}
+   ```
+4. Determine if the feedback was addressed:
+   - **resolved**: The specific issue raised in the feedback has been fixed
+   - **partially-addressed**: Some aspect was fixed but the core concern remains
+   - **still-open**: The code is unchanged or the issue was not addressed
+   - **cant-determine**: Cannot tell (e.g., file was deleted, moved, or heavily refactored)
+
+### Re-Review Step 5: Write resolutions file
+Write to `~/pr-reviews/{repo}/{prId}/resolutions-{timestamp}.json`:
+```json
+{
+  "commitSha": "{current HEAD commit SHA}",
+  "previousCommitSha": "{the commit SHA from the original review}",
+  "reviewedAt": "{ISO timestamp}",
+  "proposals": [
+    {
+      "feedbackId": "f-abc12345",
+      "verdict": "resolved",
+      "confidence": "high",
+      "reasoning": "The null-conditional operator `?.` was added to `Response?.StatusCode`, addressing the NullReferenceException risk.",
+      "proposedReply": "Looks good — the null-conditional access on `Response?.StatusCode` addresses the NRE risk I flagged. Thanks!",
+      "proposedThreadStatus": "Fixed"
+    },
+    {
+      "feedbackId": "f-def67890",
+      "verdict": "still-open",
+      "confidence": "high",
+      "reasoning": "The error handling in the catch block is unchanged — still swallowing the exception without logging.",
+      "proposedReply": null,
+      "proposedThreadStatus": null
+    }
+  ]
+}
+```
+
+Generate the filename using the current UTC time: `resolutions-{YYYYMMDD}T{HHMMSS}Z.json`
+
+**Resolution writing rules:**
+- Only include proposals for items that are `accepted` or `posted` (not `pending` or `dismissed`)
+- `proposedReply` should follow the same tone rules as feedback comments — conversational, human-sounding
+- `proposedReply` is only needed for `resolved` or `partially-addressed` verdicts
+- `proposedThreadStatus` should be `"Fixed"` for resolved items, `null` for still-open items
+- Be honest about confidence — if the change is ambiguous, say `"medium"` or `"low"`
+
+### Re-Review Step 6: New feedback (full re-review mode only)
+If the mode is "full re-review", also:
+1. Review all changed files between the previous review commit and the current HEAD
+2. Generate new feedback items for any new issues found
+3. Write to a new `feedback-{timestamp}.json` file (same format as initial review)
+4. Do NOT duplicate issues that are already covered by existing feedback items
+
+### Re-Review Step 7: Update metadata
+Update `metadata.json` with the new commit SHA and review timestamp:
+```powershell
+# Read existing metadata, update commitSha and reviewedAt
+```
+Also set `firstReviewedAt` if it doesn't already exist (preserve the original review date).
+
+### Re-Review Step 8: Summarize
+Tell the user:
+```
+Re-review complete! Open http://localhost:3847/review/{repo}/{prId} to see resolution proposals.
+Found {N} resolution proposals: {R} resolved, {P} partially addressed, {S} still open.
+{If full mode: Also found {M} new feedback items.}
+```
+
 ## Important Notes
 - **Do NOT remove the worktree** after the review. The web UI needs it to display code snippets inline with feedback comments.
 - Generate IDs using `f-` prefix plus 8 random alphanumeric characters

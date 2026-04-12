@@ -177,6 +177,68 @@ export async function getPRIterations(repoName, prId) {
   return result.value || [];
 }
 
+/**
+ * Reply to an existing thread on a pull request.
+ */
+export async function replyToThread(repoName, prId, threadId, content) {
+  const { org, project } = await getConfig();
+  const base = apiBase(org, project);
+  const url = `${base}/git/repositories/${repoName}/pullRequests/${prId}/threads/${threadId}/comments?api-version=7.1`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': await authHeader(),
+    },
+    body: JSON.stringify({
+      parentCommentId: 1,
+      content,
+      commentType: 1,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    const err = new Error(parseAdoError(response.status, errorText));
+    err.statusCode = response.status;
+    throw err;
+  }
+
+  return response.json();
+}
+
+/**
+ * Update thread status (e.g., resolve/close a thread).
+ * Status values: 1=Active, 2=Fixed, 3=WontFix, 4=Closed, 5=ByDesign, 6=Pending
+ */
+export async function updateThreadStatus(repoName, prId, threadId, status) {
+  const { org, project } = await getConfig();
+  const base = apiBase(org, project);
+  const url = `${base}/git/repositories/${repoName}/pullRequests/${prId}/threads/${threadId}?api-version=7.1`;
+
+  const statusMap = { fixed: 2, wontfix: 3, closed: 4, bydesign: 5, pending: 6, active: 1 };
+  const statusValue = typeof status === 'number' ? status : (statusMap[status.toLowerCase()] || 2);
+
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': await authHeader(),
+    },
+    body: JSON.stringify({ status: statusValue }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    const err = new Error(parseAdoError(response.status, errorText));
+    err.statusCode = response.status;
+    throw err;
+  }
+
+  return response.json();
+}
+
 /** Extract a readable message from ADO error responses */
 function parseAdoError(status, body) {
   try {
