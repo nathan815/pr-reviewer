@@ -1,0 +1,19 @@
+{
+  "ado": {
+    "org": "your-org",
+    "project": "YourProject"
+  },
+  "profiles": {
+    "copilot-cli": {
+      "program": "copilot",
+      "args": [
+        "--model",
+        "claude-opus-4.6",
+        "--yolo",
+        "-p",
+        "Use the /pr-review skill to review this PR. Spawn subagents for parallel file analysis where possible. PR URL: {{prUrl}}"
+      ]
+    }
+  },
+  "activeProfile": "copilot-cli"
+}

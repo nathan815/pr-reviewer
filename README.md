@@ -6,8 +6,9 @@ A local code review agent that reviews ADO pull requests and lets you curate fee
 
 ```powershell
 cd ~/pr-review-agent
-npm run install-skill   # Install the /pr-review skill for Copilot CLI
-npm run dev             # Start the web UI
+cp config.example.json config.json   # Then edit with your ADO org/project
+npm run install-skill                 # Install the /pr-review skill for Copilot CLI
+npm run dev                           # Start the web UI
 # → Server: http://localhost:3847
 # → UI:     http://localhost:5173
 ```
@@ -18,7 +19,7 @@ npm run dev             # Start the web UI
 Use the Copilot skill in your terminal:
 ```
 # Read the skill file, then ask Copilot to review a PR
-"Review PR https://dev.azure.com/msazure/One/_git/AVS-Tools/pullrequest/12345"
+"Review PR https://dev.azure.com/{org}/{project}/_git/{repo}/pullrequest/12345"
 ```
 
 The skill will:
@@ -43,16 +44,16 @@ ADO org/project defaults are stored in `config.json`:
 ```json
 {
   "ado": {
-    "org": "msazure",
-    "project": "One"
+    "org": "your-org",
+    "project": "YourProject"
   }
 }
 ```
 
 Environment variables are optional overrides:
 ```powershell
-$env:ADO_ORG = "msazure"
-$env:ADO_PROJECT = "One"
+$env:ADO_ORG = "your-org"
+$env:ADO_PROJECT = "YourProject"
 ```
 Token is fetched automatically via `az account get-access-token` and cached until expiry.
 

@@ -11,7 +11,7 @@ Review Azure DevOps pull requests and generate structured feedback files for the
 ## Trigger
 When a user asks to review a PR, or when a Teams message contains a PR review request with a URL like:
 - `https://dev.azure.com/{org}/{project}/_git/{repo}/pullrequest/{prId}`
-- "Can you review PR #12345 in AVS-Tools?"
+- "Can you review PR #12345 in my-repo?"
 - "Please review this PR: <url>"
 
 ## Workflow

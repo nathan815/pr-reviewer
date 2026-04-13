@@ -1,2 +1,5 @@
 node_modules/
 server/public/
+client/dist/
+.env*
+config.json
