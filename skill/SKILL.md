@@ -14,6 +14,34 @@ When a user asks to review a PR, or when a Teams message contains a PR review re
 - "Can you review PR #12345 in my-repo?"
 - "Please review this PR: <url>"
 
+## Invocation Modes
+
+This skill can be invoked in two contexts:
+
+1. **From PR Reviewer server** (background agent) — the server launches you with the PR URL and expects a full review. Skip straight to Step 1 below.
+2. **From a user's Copilot session** — the user asks you to review a PR interactively.
+
+### When invoked from a user's session:
+Before starting the review, ask the user:
+
+> I can review this PR two ways:
+> 1. **Queue it** — send it to PR Reviewer to run in the background (check results at http://localhost:3847)
+> 2. **Review here** — run the full review in this session
+>
+> Which do you prefer?
+
+If the user chooses **Queue it**:
+- Call the PR Reviewer API to queue the review:
+  ```powershell
+  Invoke-RestMethod -Uri "http://localhost:3847/api/reviews" -Method POST -ContentType "application/json" -Body '{"prUrl":"{full PR URL}"}'
+  ```
+- Tell the user the review is queued and they can check the dashboard.
+- **Stop here** — do not proceed with the review steps below.
+
+If the user chooses **Review here**, proceed with Step 1 below.
+
+**How to detect context**: If your prompt includes `PR_REVIEWER_AGENT=true` or you were launched by the review server, you're in mode 1 — skip the prompt and review directly.
+
 ## Workflow
 
 ### Step 1: Parse the PR

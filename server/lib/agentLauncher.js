@@ -22,6 +22,7 @@ function buildSpawnEnv() {
     FORCE_COLOR: process.env.FORCE_COLOR || '1',
     CLICOLOR_FORCE: process.env.CLICOLOR_FORCE || '1',
     TERM: process.env.TERM || 'xterm-256color',
+    PR_REVIEWER_AGENT: 'true',
   };
 }
 
