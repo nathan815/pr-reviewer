@@ -13,7 +13,7 @@ export default function Learnings() {
   const [stats, setStats] = useState(null);
   const [guidelines, setGuidelines] = useState(null);
   const [examples, setExamples] = useState(null);
-  const [curationStatus, setCurationStatus] = useState(null);
+  const [learningStatus, setlearningStatus] = useState(null);
   const [launching, setLaunching] = useState(false);
   const [activeTab, setActiveTab] = useState('guidelines');
   const [selectedRepo, setSelectedRepo] = useState(null);
@@ -24,7 +24,7 @@ export default function Learnings() {
     fetch('/api/learnings/stats').then(r => r.json()).then(setStats).catch(() => {});
     const repoParam = selectedRepoRef.current ? `?repo=${encodeURIComponent(selectedRepoRef.current)}` : '';
     fetch(`/api/learnings/guidelines${repoParam}`).then(r => r.json()).then(setGuidelines).catch(() => {});
-    fetch('/api/learnings/curate/status').then(r => r.json()).then(setCurationStatus).catch(() => {});
+    fetch('/api/learnings/learn/status').then(r => r.json()).then(setlearningStatus).catch(() => {});
   };
 
   useEffect(() => {
@@ -42,10 +42,10 @@ export default function Learnings() {
       .catch(() => {});
   };
 
-  const handleCurate = async () => {
+  const handleLearn = async () => {
     setLaunching(true);
     try {
-      const res = await fetch('/api/learnings/curate', { method: 'POST' });
+      const res = await fetch('/api/learnings/learn', { method: 'POST' });
       const data = await res.json();
       if (data.status === 'skipped') {
         alert(data.reason);
@@ -56,10 +56,10 @@ export default function Learnings() {
     }
   };
 
-  const curationOutput = useMemo(() => {
-    if (!curationStatus?.outputTail) return '';
-    return ansiConverter.toHtml(curationStatus.outputTail);
-  }, [curationStatus?.outputTail]);
+  const learningOutput = useMemo(() => {
+    if (!learningStatus?.outputTail) return '';
+    return ansiConverter.toHtml(learningStatus.outputTail);
+  }, [learningStatus?.outputTail]);
 
   const filteredExamples = useMemo(() => {
     if (!examples) return [];
@@ -98,10 +98,10 @@ export default function Learnings() {
           <h1 style={{ fontSize: 22, margin: 0 }}><IconChart /> Learnings & Guidelines</h1>
           <button
             className="btn btn-rerun"
-            onClick={handleCurate}
-            disabled={launching || curationStatus?.status === 'running'}
+            onClick={handleLearn}
+            disabled={launching || learningStatus?.status === 'running'}
           >
-            {curationStatus?.status === 'running' ? 'Curating…' : <><IconBrain /> Run Curation</>}
+            {learningStatus?.status === 'running' ? 'Learning…' : <><IconBrain /> Run Learning</>}
           </button>
         </div>
       </div>
@@ -126,8 +126,8 @@ export default function Learnings() {
             <div className="stat-label">Decision Accept Rate</div>
           </div>
           <div className="stat-card">
-            <div className="stat-value">{stats.newSinceCuration}</div>
-            <div className="stat-label">New Since Curation</div>
+            <div className="stat-value">{stats.newSinceLearning}</div>
+            <div className="stat-label">New Since Learning</div>
           </div>
           <div className="stat-card">
             <div className="stat-value">{stats.withNotes}</div>
@@ -162,23 +162,23 @@ export default function Learnings() {
         </div>
       )}
 
-      {/* Curation agent status */}
-      {curationStatus && curationStatus.status !== 'idle' && (
+      {/* Learning Agent status */}
+      {learningStatus && learningStatus.status !== 'idle' && (
         <div className="overview-section">
-          <h2>Curation Agent</h2>
+          <h2>Learning Agent</h2>
           <div style={{ fontSize: 13, marginBottom: 8 }}>
-            <span className={`badge agent-badge-${curationStatus.status}`}>{curationStatus.status}</span>
-            {curationStatus.startedAt && (
+            <span className={`badge agent-badge-${learningStatus.status}`}>{learningStatus.status}</span>
+            {learningStatus.startedAt && (
               <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>
-                Started {new Date(curationStatus.startedAt).toLocaleString()}
+                Started {new Date(learningStatus.startedAt).toLocaleString()}
               </span>
             )}
           </div>
-          {curationStatus.outputTail && (
+          {learningStatus.outputTail && (
             <pre
               className="agent-output-preview"
               style={{ maxHeight: 200, overflow: 'auto', fontSize: 12 }}
-              dangerouslySetInnerHTML={{ __html: curationOutput }}
+              dangerouslySetInnerHTML={{ __html: learningOutput }}
             />
           )}
         </div>
@@ -219,7 +219,7 @@ export default function Learnings() {
               <div className="markdown-body"><Markdown>{guidelines.global}</Markdown></div>
             ) : (
               <div className="empty-state">
-                No global guidelines yet. Accept/reject some review feedback, then run curation.
+                No global guidelines yet. Accept/reject some review feedback, then Run Learning.
               </div>
             )}
           </div>

@@ -175,7 +175,7 @@ export default function AgentStatusPanel({ repo, prId, onRelaunched, filterTypes
                 }
                 <div>
                   <div className="agent-item-name">
-                    {agent.agentType === 'curation' ? 'Curation' : agent.agentType === 'discussion' ? `Discussion · ${agent.feedbackId}` : `Reviewer · ${agent.profileName}`}
+                    {agent.agentType === 'learning' ? 'learning' : agent.agentType === 'discussion' ? `Discussion · ${agent.feedbackId}` : `Reviewer · ${agent.profileName}`}
                   </div>
                   <div className="agent-item-meta">
                     {!repo && agent.repo && agent.prId

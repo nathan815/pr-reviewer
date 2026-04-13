@@ -5,10 +5,10 @@ import {
   deleteLearningExample,
   getGuidelines,
   listRepoGuidelines,
-  getExamplesSinceCuration,
-  markCurationComplete,
+  getExamplesSinceLearning,
+  markLearningComplete,
 } from '../lib/fileStore.js';
-import { launchCurationAgent, getCurationStatus } from '../lib/agentLauncher.js';
+import { launchLearningAgent, getLearningStatus } from '../lib/agentLauncher.js';
 
 export const learningsRouter = Router();
 
@@ -16,8 +16,8 @@ export const learningsRouter = Router();
 learningsRouter.get('/stats', async (_req, res) => {
   try {
     const stats = await getLearningStats();
-    const newExamples = await getExamplesSinceCuration();
-    stats.newSinceCuration = newExamples.length;
+    const newExamples = await getExamplesSinceLearning();
+    stats.newSinceLearning = newExamples.length;
     res.json(stats);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -46,20 +46,20 @@ learningsRouter.get('/guidelines', async (req, res) => {
   }
 });
 
-// Launch curation agent
-learningsRouter.post('/curate', async (_req, res) => {
+// Launch learning agent
+learningsRouter.post('/learn', async (_req, res) => {
   try {
-    const result = await launchCurationAgent();
+    const result = await launchLearningAgent();
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Get curation agent status
-learningsRouter.get('/curate/status', async (_req, res) => {
+// Get learning agent status
+learningsRouter.get('/learn/status', async (_req, res) => {
   try {
-    const status = getCurationStatus();
+    const status = getLearningStatus();
     res.json(status);
   } catch (err) {
     res.status(500).json({ error: err.message });

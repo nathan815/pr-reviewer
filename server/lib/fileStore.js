@@ -903,7 +903,7 @@ export async function syncAdoReplies(repo, prId, feedbackId = null) {
   return { imported };
 }
 
-/** Read the curated guidelines (global, per-repo, or both) */
+/** Read the learned guidelines (global, per-repo, or both) */
 export async function getGuidelines(repo) {
   const global = await fs.readFile(GUIDELINES_PATH, 'utf-8').catch(() => null);
   let perRepo = null;
@@ -932,18 +932,18 @@ export async function listRepoGuidelines() {
   }
 }
 
-/** Get examples added since last curation */
-export async function getExamplesSinceCuration() {
-  const lastCuratedAt = await fs.readFile(
-    path.join(LEARNINGS_DIR, '.last-curated'), 'utf-8'
+/** Get examples added since last learning run */
+export async function getExamplesSinceLearning() {
+  const lastLearnedAt = await fs.readFile(
+    path.join(LEARNINGS_DIR, '.last-learned'), 'utf-8'
   ).catch(() => '1970-01-01T00:00:00Z');
-  const cutoff = new Date(lastCuratedAt.trim()).getTime();
+  const cutoff = new Date(lastLearnedAt.trim()).getTime();
   const all = await getLearningExamples();
   return all.filter(e => new Date(e.timestamp).getTime() > cutoff);
 }
 
-/** Mark curation as complete — snapshot existing guidelines to history */
-export async function markCurationComplete() {
+/** Mark learning run as complete — snapshot existing guidelines to history */
+export async function markLearningComplete() {
   await ensureDir(LEARNINGS_DIR);
   const historyDir = path.join(LEARNINGS_DIR, 'history');
   await ensureDir(historyDir);
@@ -955,7 +955,7 @@ export async function markCurationComplete() {
     await fs.writeFile(path.join(historyDir, `guidelines-${ts}.md`), global, 'utf-8');
   }
 
-  await fs.writeFile(path.join(LEARNINGS_DIR, '.last-curated'), new Date().toISOString(), 'utf-8');
+  await fs.writeFile(path.join(LEARNINGS_DIR, '.last-learned'), new Date().toISOString(), 'utf-8');
 }
 
 // --- Extra Instructions ---

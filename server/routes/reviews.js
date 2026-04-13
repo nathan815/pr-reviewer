@@ -11,7 +11,7 @@ import {
   deleteAllFeedback,
   readFileAtCommit,
   getFileDiff,
-  getExamplesSinceCuration,
+  getExamplesSinceLearning,
   updateMetadata,
   syncAdoReplies,
   syncWorktree,
@@ -22,10 +22,10 @@ import {
   updateFeedbackAdoThreadStatus,
 } from '../lib/fileStore.js';
 import { getPRDetails, replyToThread, updateThreadStatus } from '../lib/adoClient.js';
-import { launchCurationAgent, getCurationStatus, launchDiscussionAgent, getDiscussionStatus } from '../lib/agentLauncher.js';
+import { launchLearningAgent, getLearningStatus, launchDiscussionAgent, getDiscussionStatus } from '../lib/agentLauncher.js';
 
 const REVIEWS_ROOT = path.join(os.homedir(), 'pr-reviews');
-const AUTO_CURATE_THRESHOLD = 20; // auto-curate after this many new decisions
+const AUTO_LEARN_THRESHOLD = 20; // auto-learn after this many new decisions
 
 export const reviewsRouter = Router();
 
@@ -157,13 +157,13 @@ reviewsRouter.patch('/:repo/:prId/feedback/:feedbackId', async (req, res) => {
     );
     res.json(item);
 
-    // Check auto-curation threshold (fire-and-forget)
+    // Check auto-learning threshold (fire-and-forget)
     if (status === 'accepted' || status === 'noted' || status === 'rejected') {
-      getExamplesSinceCuration().then(examples => {
-        if (examples.length >= AUTO_CURATE_THRESHOLD && getCurationStatus().status !== 'running') {
-          console.log(`[auto-curate] ${examples.length} new decisions — launching curation agent`);
-          launchCurationAgent().catch(err =>
-            console.error(`[auto-curate] Failed: ${err.message}`)
+      getExamplesSinceLearning().then(examples => {
+        if (examples.length >= AUTO_LEARN_THRESHOLD && getLearningStatus().status !== 'running') {
+          console.log(`[auto-learn] ${examples.length} new decisions — launching learning agent`);
+          launchLearningAgent().catch(err =>
+            console.error(`[auto-learn] Failed: ${err.message}`)
           );
         }
       }).catch(() => {});

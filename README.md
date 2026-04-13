@@ -1,6 +1,6 @@
 # PR Review Agent
 
-A local code review agent that reviews ADO pull requests and lets you curate feedback before posting.
+A local code review agent that reviews ADO pull requests and lets you review feedback before posting.
 
 ## Quick Start
 

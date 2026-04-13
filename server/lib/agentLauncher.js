@@ -516,26 +516,26 @@ export function getAgentStatuses() {
       feedbackId: info.feedbackId,
     });
   }
-  // Include curation agent
-  if (curationAgent) {
-    const stdout = typeof curationAgent.stdout === 'function' ? curationAgent.stdout() : (curationAgent._stdout || '');
-    const stderr = typeof curationAgent.stderr === 'function' ? curationAgent.stderr() : (curationAgent._stderr || '');
+  // Include Learning Agent
+  if (learningAgent) {
+    const stdout = typeof learningAgent.stdout === 'function' ? learningAgent.stdout() : (learningAgent._stdout || '');
+    const stderr = typeof learningAgent.stderr === 'function' ? learningAgent.stderr() : (learningAgent._stderr || '');
     statuses.push({
-      key: 'curation',
+      key: 'learning',
       repo: null,
       prId: null,
-      pid: curationAgent.pid,
-      status: curationAgent.status,
-      profileName: 'curation',
-      command: curationAgent.command || null,
-      startedAt: curationAgent.startedAt,
-      completedAt: curationAgent.completedAt || null,
-      exitCode: curationAgent.exitCode ?? null,
-      error: curationAgent.error || null,
+      pid: learningAgent.pid,
+      status: learningAgent.status,
+      profileName: 'learning',
+      command: learningAgent.command || null,
+      startedAt: learningAgent.startedAt,
+      completedAt: learningAgent.completedAt || null,
+      exitCode: learningAgent.exitCode ?? null,
+      error: learningAgent.error || null,
       outputTail: stdout.slice(-500),
       stderrTail: stderr.slice(-500),
       outputLength: stdout.length,
-      agentType: 'curation',
+      agentType: 'learning',
     });
   }
   return statuses;
@@ -556,8 +556,8 @@ export async function getAgentOutputByKey(key) {
   // Check discussion agents
   if (discussionAgents.has(key)) return await extract(discussionAgents.get(key));
 
-  // Check curation agent
-  if (key === 'curation' && curationAgent) return await extract(curationAgent);
+  // Check Learning Agent
+  if (key === 'learning' && learningAgent) return await extract(learningAgent);
 
   // Fall back to persisted state on disk (review agents only)
   const parts = key.split('/');
@@ -844,13 +844,13 @@ async function loadPersistedAgentStates() {
   }
 }
 
-// --- Curation Agent ---
+// --- Learning Agent ---
 
-let curationAgent = null;
+let learningAgent = null;
 
-export async function launchCurationAgent() {
-  if (curationAgent?.status === 'running') {
-    return { status: 'already_running', pid: curationAgent.pid };
+export async function launchLearningAgent() {
+  if (learningAgent?.status === 'running') {
+    return { status: 'already_running', pid: learningAgent.pid };
   }
 
   const config = await readConfig();
@@ -858,20 +858,20 @@ export async function launchCurationAgent() {
   const profile = config.profiles[profileName];
   if (!profile) throw new Error(`Profile ${profileName} not found`);
 
-  const { getGuidelines, getExamplesSinceCuration, getLearningExamples, listRepoGuidelines } = await import('./fileStore.js');
+  const { getGuidelines, getExamplesSinceLearning, getLearningExamples, listRepoGuidelines } = await import('./fileStore.js');
   const { global: globalGuidelines } = await getGuidelines();
   const reposWithGuidelines = await listRepoGuidelines();
-  const newExamples = await getExamplesSinceCuration();
+  const newExamples = await getExamplesSinceLearning();
   const allExamples = await getLearningExamples();
 
   if (newExamples.length === 0 && globalGuidelines) {
-    return { status: 'skipped', reason: 'No new examples since last curation' };
+    return { status: 'skipped', reason: 'No new examples since last learning run' };
   }
 
   // Group examples by repo for the agent to see patterns
   const repos = [...new Set(allExamples.map(e => e.repo))];
 
-  // Build the curation prompt
+  // Build the learning prompt
   const formatExample = e => {
     const exampleType = e.exampleType || 'decision';
     if (exampleType === 'discussion-edit') {
@@ -893,7 +893,7 @@ export async function launchCurationAgent() {
     `Repos: ${repos.join(', ')}`,
   ].join('\n');
 
-  let prompt = `You are a reviewer guidelines curator. Your job is to maintain two levels of reviewer guidelines based on the user's accept/reject/note decisions on PR review comments, plus follow-up discussion edits and ADO replies:\n\n`;
+  let prompt = `You are a reviewer guidelines learner. Your job is to maintain two levels of reviewer guidelines based on the user's accept/reject/note decisions on PR review comments, plus follow-up discussion edits and ADO replies:\n\n`;
   prompt += `1. **Global guidelines** at ~/pr-reviews/.learnings/guidelines.md — rules that apply across all repos\n`;
   prompt += `2. **Per-repo guidelines** at ~/pr-reviews/.learnings/repo/{repoName}/guidelines.md — rules specific to a codebase\n\n`;
   prompt += `Decision types:\n`;
@@ -901,7 +901,7 @@ export async function launchCurationAgent() {
   prompt += `- **NOTED** — the user found this informational/useful for themselves, but does NOT want it posted to ADO. Future reviews should still generate these but auto-categorize them as notes.\n`;
   prompt += `- **REJECTED** — the user did not find this comment useful\n`;
   prompt += `- **DISCUSSION_EDIT** — after reviewer discussion, the feedback was revised. Use these to learn better wording, scope, and line targeting.\n`;
-  prompt += `- **ADO_REPLY** — someone replied after the curated comment was posted to ADO. Use these as downstream signal about whether the posted comment was clear, correct, and useful.\n\n`;
+  prompt += `- **ADO_REPLY** — someone replied after the posted comment was posted to ADO. Use these as downstream signal about whether the posted comment was clear, correct, and useful.\n\n`;
   prompt += `${statsBlock}\n\n`;
 
   // Include existing guidelines
@@ -918,7 +918,7 @@ export async function launchCurationAgent() {
   // Include examples
   if (globalGuidelines) {
     const examplesBlock = newExamples.map(formatExample).join('\n');
-    prompt += `## New Examples Since Last Curation (${newExamples.length} items)\n${examplesBlock}\n\n`;
+    prompt += `## New Examples Since last learning run (${newExamples.length} items)\n${examplesBlock}\n\n`;
   } else {
     const allBlock = allExamples.map(formatExample).join('\n');
     prompt += `## All Examples (${allExamples.length} items)\n${allBlock}\n\n`;
@@ -931,7 +931,7 @@ export async function launchCurationAgent() {
   prompt += `4. If existing guidelines exist, MERGE new learnings in — keep all still-valid rules, refine or remove contradicted ones\n`;
   prompt += `5. Write updated global guidelines to ~/pr-reviews/.learnings/guidelines.md\n`;
   prompt += `6. For each repo with specific patterns, write to ~/pr-reviews/.learnings/repo/{repoName}/guidelines.md\n`;
-  prompt += `7. After writing all files, write the current ISO timestamp to ~/pr-reviews/.learnings/.last-curated\n\n`;
+  prompt += `7. After writing all files, write the current ISO timestamp to ~/pr-reviews/.learnings/.last-learned\n\n`;
   prompt += `## Guidelines format\n`;
   prompt += `Each guidelines file should have these sections:\n`;
   prompt += `- **DO comment on** — patterns the reviewer wants flagged\n`;
@@ -944,7 +944,7 @@ export async function launchCurationAgent() {
   prompt += `For per-repo files, focus on what's unique to that codebase (tech stack, naming conventions, patterns used, etc.).\n`;
 
   // Write prompt to temp file to avoid Windows command-line length limits
-  const promptFile = path.join(os.tmpdir(), `pr-review-curation-${Date.now()}.txt`);
+  const promptFile = path.join(os.tmpdir(), `pr-review-learning-${Date.now()}.txt`);
   await fs.writeFile(promptFile, prompt, 'utf8');
 
   // Build args — replace the review prompt with @promptFile reference
@@ -956,7 +956,7 @@ export async function launchCurationAgent() {
     args.push('-p', `@${promptFile}`);
   }
 
-  const displayCmd = `${profile.program} ${args.map(a => a.startsWith('@') && a.includes('curation') ? '"@<prompt-file>"' : a).join(' ')}`;
+  const displayCmd = `${profile.program} ${args.map(a => a.startsWith('@') && a.includes('learning') ? '"@<prompt-file>"' : a).join(' ')}`;
 
   // Use spawn with args array to avoid Windows command-line length limit
   const child = spawn(profile.program, args, {
@@ -970,7 +970,7 @@ export async function launchCurationAgent() {
   child.stdout?.on('data', d => { stdout += d.toString(); });
   child.stderr?.on('data', d => { stderr += d.toString(); });
 
-  curationAgent = {
+  learningAgent = {
     status: 'running',
     pid: child.pid,
     command: displayCmd,
@@ -980,38 +980,38 @@ export async function launchCurationAgent() {
   };
 
   child.on('close', async (code) => {
-    curationAgent.status = code === 0 ? 'completed' : 'failed';
-    curationAgent.exitCode = code;
-    curationAgent.completedAt = new Date().toISOString();
-    curationAgent._stdout = stdout;
-    curationAgent._stderr = stderr;
-    console.log(`[curation] Agent ${curationAgent.status} (exit ${code})`);
+    learningAgent.status = code === 0 ? 'completed' : 'failed';
+    learningAgent.exitCode = code;
+    learningAgent.completedAt = new Date().toISOString();
+    learningAgent._stdout = stdout;
+    learningAgent._stderr = stderr;
+    console.log(`[learning] Agent ${learningAgent.status} (exit ${code})`);
     fs.unlink(promptFile).catch(() => {});
   });
 
   child.on('error', (err) => {
-    curationAgent.status = 'failed';
-    curationAgent.error = err.message;
-    curationAgent.completedAt = new Date().toISOString();
-    curationAgent._stdout = stdout;
-    curationAgent._stderr = stderr;
+    learningAgent.status = 'failed';
+    learningAgent.error = err.message;
+    learningAgent.completedAt = new Date().toISOString();
+    learningAgent._stdout = stdout;
+    learningAgent._stderr = stderr;
     fs.unlink(promptFile).catch(() => {});
   });
 
   return { status: 'launched', pid: child.pid };
 }
 
-export function getCurationStatus() {
-  if (!curationAgent) return { status: 'idle', message: 'No curation has been run' };
-  const out = typeof curationAgent.stdout === 'function' ? curationAgent.stdout() : (curationAgent._stdout || '');
-  const err = typeof curationAgent.stderr === 'function' ? curationAgent.stderr() : (curationAgent._stderr || '');
+export function getLearningStatus() {
+  if (!learningAgent) return { status: 'idle', message: 'No learning has been run' };
+  const out = typeof learningAgent.stdout === 'function' ? learningAgent.stdout() : (learningAgent._stdout || '');
+  const err = typeof learningAgent.stderr === 'function' ? learningAgent.stderr() : (learningAgent._stderr || '');
   return {
-    status: curationAgent.status,
-    pid: curationAgent.pid,
-    startedAt: curationAgent.startedAt,
-    completedAt: curationAgent.completedAt || null,
-    exitCode: curationAgent.exitCode ?? null,
-    error: curationAgent.error || null,
+    status: learningAgent.status,
+    pid: learningAgent.pid,
+    startedAt: learningAgent.startedAt,
+    completedAt: learningAgent.completedAt || null,
+    exitCode: learningAgent.exitCode ?? null,
+    error: learningAgent.error || null,
     outputTail: out.slice(-2000),
     stderrTail: err.slice(-1000),
   };

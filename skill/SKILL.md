@@ -152,7 +152,7 @@ if (Test-Path "$HOME\pr-reviews\extra_instructions.md") {
 If extra instructions exist, follow them — they provide important context like where repos are located, review preferences, and project-specific information.
 
 ### Step 9: Load reviewer guidelines
-Before reviewing, check for curated guidelines that reflect the user's preferences:
+Before reviewing, check for learned guidelines that reflect the user's preferences:
 ```powershell
 # Global guidelines
 if (Test-Path "$HOME\pr-reviews\.learnings\guidelines.md") {

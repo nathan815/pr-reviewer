@@ -44,7 +44,7 @@ export default function Dashboard() {
           onClose={() => setShowModal(false)}
           onLaunched={() => { setTimeout(loadReviews, 1000); }}
         />
-        <AgentStatusPanel filterTypes={['review', 'curation']} maxItems={5} onRelaunched={loadReviews} />
+        <AgentStatusPanel filterTypes={['review', 'learning']} maxItems={5} onRelaunched={loadReviews} />
       </div>
     );
   }
@@ -69,7 +69,7 @@ export default function Dashboard() {
         onLaunched={() => { setTimeout(loadReviews, 1000); }}
       />
 
-      <AgentStatusPanel filterTypes={['review', 'curation']} maxItems={5} onRelaunched={loadReviews} />
+      <AgentStatusPanel filterTypes={['review', 'learning']} maxItems={5} onRelaunched={loadReviews} />
 
       <div className="stats-row">
         <div className="stat-box">
