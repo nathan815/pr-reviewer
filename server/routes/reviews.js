@@ -213,9 +213,9 @@ reviewsRouter.get('/:repo/:prId/file', async (req, res) => {
 // Read diff/source payload for a file in the PR
 reviewsRouter.get('/:repo/:prId/file-diff', async (req, res) => {
   try {
-    const { path: filePath, commit, context } = req.query;
+    const { path: filePath, commit } = req.query;
     if (!filePath) return res.status(400).json({ error: 'path query parameter required' });
-    const diff = await getFileDiff(req.params.repo, req.params.prId, filePath, commit, context);
+    const diff = await getFileDiff(req.params.repo, req.params.prId, filePath, commit);
     res.json(diff);
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'File not found' });

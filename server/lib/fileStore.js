@@ -339,20 +339,20 @@ export async function readFileAtCommit(repo, prId, filePath, commitSha) {
 }
 
 /** Build diff/source payload for a file in the PR worktree (with disk cache) */
-export async function getFileDiff(repo, prId, filePath, commitSha, contextLines = 3) {
+export async function getFileDiff(repo, prId, filePath, commitSha) {
   const dir = reviewDir(repo, prId);
   const worktreePath = path.join(dir, 'worktree');
   const metadata = await readJson(path.join(dir, 'metadata.json'));
 
   const headRef = resolveHeadRef(worktreePath, commitSha || metadata.commitSha);
 
-  // Check disk cache first
+  const baseRef = resolveBaseRef(worktreePath, metadata.targetBranch, headRef);
+
+  // Check disk cache — validate baseRef matches to avoid stale diffs
   if (headRef) {
     const cached = await readDiffCache(dir, headRef, filePath);
-    if (cached) return cached;
+    if (cached && cached.baseRef === baseRef) return cached;
   }
-
-  const baseRef = resolveBaseRef(worktreePath, metadata.targetBranch, headRef);
 
   const oldSourceFromBase = readGitFile(worktreePath, baseRef, filePath) ?? '';
   let newSource = readGitFile(worktreePath, headRef, filePath);
@@ -365,6 +365,7 @@ export async function getFileDiff(repo, prId, filePath, commitSha, contextLines 
   }
 
   const oldSource = baseRef ? oldSourceFromBase : newSource;
+  // Always use full-file context so the client can window freely
   const diffText = baseRef
     ? runGit(
         worktreePath,
@@ -372,7 +373,7 @@ export async function getFileDiff(repo, prId, filePath, commitSha, contextLines 
           '--no-pager',
           'diff',
           '--no-ext-diff',
-          `--unified=${Math.max(0, Number(contextLines) || 0)}`,
+          '--unified=1000000',
           baseRef,
           headRef,
           '--',

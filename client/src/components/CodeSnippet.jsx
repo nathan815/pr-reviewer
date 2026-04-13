@@ -11,7 +11,6 @@ import refractor from 'refractor';
 
 const INITIAL_CONTEXT = 5;
 const EXPAND_STEP = 10;
-const FULL_DIFF_CONTEXT = 1000000;
 const diffCache = new Map();
 
 function splitLines(text = '') {
@@ -213,7 +212,6 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
         try {
           const params = new URLSearchParams({ path: file });
           if (activeCommit) params.set('commit', activeCommit);
-          params.set('context', String(FULL_DIFF_CONTEXT));
 
         const response = await fetch(`/api/reviews/${repo}/${prId}/file-diff?${params}`);
         const data = response.ok ? await readJsonIfPossible(response) : null;
@@ -290,7 +288,11 @@ export default function CodeSnippet({ repo, prId, file, startLine, endLine, comm
         .filter(hunk => overlapsWindow(hunk, visibleStart, visibleEnd))
         .map(hunk => clipHunkToWindow(hunk, visibleStart, visibleEnd))
         .filter(Boolean);
-      return focused.length ? focused : sourceHunks;
+      return focused.length ? focused : buildFallbackHunks(
+        newLines,
+        showFullFile ? 1 : visibleStart,
+        showFullFile ? newLines.length : visibleEnd
+      );
     }
 
     return buildFallbackHunks(
