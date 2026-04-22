@@ -370,7 +370,7 @@ export default function ReviewDetail() {
 
   // Build resolution map: feedbackId → proposal
   const resolutionMap = {};
-  if (resolutions?.proposals) {
+  if (Array.isArray(resolutions?.proposals)) {
     for (const p of resolutions.proposals) {
       resolutionMap[p.feedbackId] = p;
     }
@@ -614,7 +614,7 @@ export default function ReviewDetail() {
         <div className="overview-section">
           <h2>Reviewers</h2>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {[...adoInfo.reviewers].sort((a, b) => a.name.localeCompare(b.name)).map((r, i) => (
+            {[...(Array.isArray(adoInfo.reviewers) ? adoInfo.reviewers : [])].sort((a, b) => a.name.localeCompare(b.name)).map((r, i) => (
               <span key={i} className="badge" style={{
                 background: r.vote === 10 ? 'rgba(63,185,80,0.15)' : r.vote === 5 ? 'rgba(63,185,80,0.1)' :
                   r.vote === -10 ? 'rgba(248,81,73,0.15)' : r.vote === -5 ? 'rgba(210,153,34,0.15)' : 'rgba(139,148,158,0.1)',
@@ -660,7 +660,7 @@ export default function ReviewDetail() {
       {/* Changed Files */}
       <div ref={changedFilesRef}>
         <ChangedFiles
-          files={metadata.changedFiles || [...new Set(items.map(i => i.file).filter(Boolean))]}
+          files={Array.isArray(metadata.changedFiles) ? metadata.changedFiles : [...new Set(items.map(i => i.file).filter(Boolean))]}
           feedbackItems={items}
           activeFile={activeFile}
           onFileClick={handleFileClick}

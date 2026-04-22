@@ -4,7 +4,7 @@ import { IconFile, IconFolder } from './Icons';
 export default function ChangedFiles({ files, feedbackItems, activeFile, onFileClick }) {
   const [collapsed, setCollapsed] = useState(false);
 
-  if (!files || files.length === 0) return null;
+  if (!Array.isArray(files) || files.length === 0) return null;
 
   // Build tree structure from flat file paths
   const tree = buildTree(files, feedbackItems);
