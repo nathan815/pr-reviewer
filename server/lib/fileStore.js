@@ -102,7 +102,7 @@ async function readAllFeedback(dir) {
       const filePath = path.join(dir, file);
       try {
         const data = await readJson(filePath);
-        const fileItems = data.items || [];
+        const fileItems = Array.isArray(data) ? data : (data.items || []);
         for (const item of fileItems) {
           items.push(item);
           fileMap.set(item.id, filePath);
