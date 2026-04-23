@@ -174,35 +174,46 @@ $commitSha = git rev-parse HEAD
 $changedFiles = git diff {targetBranch}...HEAD --name-only
 ```
 
-#### feedback-{timestamp}.json
-Each agent run writes its own feedback file using a timestamp (e.g., `feedback-20260409T203000Z.json`). The server merges all `feedback-*.json` files when displaying. This ensures re-runs never overwrite previous feedback.
+#### Feedback items
+Each agent run writes its own feedback file using the `write-feedback.js` script. The server merges all `feedback-*.json` files when displaying. This ensures re-runs never overwrite previous feedback.
 
-Generate the filename using the current UTC time:
-```
-feedback-{YYYYMMDD}T{HHMMSS}Z.json
+**⚠️ DO NOT write feedback JSON files directly.** Use the `write-feedback.js` script — it validates every field and rejects bad input. If the script exits with an error, fix the input and retry.
+
+Pipe a JSON array of feedback items to the script:
+```powershell
+@'
+[
+  {
+    "id": "f-{random8chars}",
+    "file": "src/path/to/file.ts",
+    "startLine": 42,
+    "endLine": 45,
+    "commitSha": "{same HEAD commit SHA from metadata}",
+    "severity": "medium",
+    "category": "bug",
+    "title": "Short descriptive title",
+    "comment": "Detailed explanation of the issue. Use markdown.",
+    "suggestion": "Concrete suggestion for how to fix it."
+  }
+]
+'@ | node "$HOME\.agents\skills\pr-review\review\write-feedback.js" "$HOME\pr-reviews\{repo}\{prId}"
 ```
 
-Generate feedback items with unique IDs. Each item MUST include file path, line numbers, and the commit SHA being reviewed:
-```json
-{
-  "items": [
-    {
-      "id": "f-{random8chars}",
-      "file": "src/path/to/file.ts",
-      "startLine": 42,
-      "endLine": 45,
-      "commitSha": "{same HEAD commit SHA from metadata}",
-      "severity": "high|medium|low|info",
-      "category": "bug|security|performance|style|design|testing|documentation",
-      "title": "Short descriptive title (a concise phrase, not a run-on sentence)",
-      "comment": "Detailed explanation of the issue and why it matters. Use markdown formatting. Use proper punctuation — no run-on sentences.",
-      "suggestion": "Concrete suggestion for how to fix it. For direct code replacements, use ADO suggestion blocks (see formatting notes below). For broader guidance, use regular markdown.",
-      "status": "pending",
-      "adoThreadId": null
-    }
-  ]
-}
-```
+**Field reference:**
+| Field | Type | Required | Values |
+|-------|------|----------|--------|
+| `id` | string | yes | Must start with `f-` (e.g., `f-a1b2c3d4`) |
+| `file` | string | yes | Relative file path from repo root |
+| `startLine` | number | yes | First line of the issue (use `grep -n` to find) |
+| `endLine` | number | yes | Last line of the issue |
+| `commitSha` | string | yes | HEAD commit SHA from metadata |
+| `severity` | string | yes | `critical`, `high`, `medium`, `low`, or `info` |
+| `category` | string | yes | `bug`, `security`, `performance`, `style`, `design`, `testing`, or `documentation` |
+| `title` | string | yes | Short phrase describing the issue |
+| `comment` | string | yes | Detailed explanation (markdown) |
+| `suggestion` | string | no | Fix suggestion (markdown). Omit or set to `null` if none. |
+
+The script sets `status: "pending"` and `adoThreadId: null` automatically.
 
 #### risk-assessment.json
 ```json
