@@ -1,7 +1,7 @@
 # Installs the pr-review skill to ~/.agents/skills/pr-review/
 # so Copilot CLI picks it up globally.
 
-$SkillDir = Join-Path $HOME ".agents" "skills" "pr-review"
+$SkillDir = Join-Path (Join-Path (Join-Path $HOME ".agents") "skills") "pr-review"
 $SourceDir = Join-Path $PSScriptRoot "skill"
 
 # Create target directory
